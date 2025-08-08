@@ -85,7 +85,21 @@ function set_git_config() {
 function setup_bosh_env_vars() {
   set +x
   if [ -d toolsmiths-env ]; then
+
+    echo "==================================================="
+    echo "==================================================="
+    echo "DEBUG: Found toolsmiths-env directory"
+    echo "DEBUG: Metadata contents:"
+    cat toolsmiths-env/metadata | jq .
+    echo "DEBUG: Running bbl print-env with metadata file"
+
     eval "$(bbl print-env --metadata-file toolsmiths-env/metadata)"
+
+    echo "DEBUG: BOSH_ENVIRONMENT is now: $BOSH_ENVIRONMENT"
+
+    echo "==================================================="
+    echo "==================================================="
+
     export SYSTEM_DOMAIN="$(cat toolsmiths-env/metadata | jq -r '.cf.api_url | sub("api."; "")')"
     export TCP_DOMAIN="tcp.${SYSTEM_DOMAIN}"
   else
