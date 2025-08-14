@@ -1,5 +1,15 @@
 #!/bin/bash -eux
 
+# Defaults for shepherd tunnel
+: "${SSH_SOCKS_PROXY_PORT:=5555}"
+: "${ENVIRONMENT_LOCK_METADATA:=toolsmiths-env/metadata}"
+
+# Check for environment lock metadata file
+if [[ ! -f $ENVIRONMENT_LOCK_METADATA ]]; then
+  echo >&2 "Missing $ENVIRONMENT_LOCK_METADATA"
+  exit 1
+fi
+
 check_bbl_input_params() {
   set +x
   # Checks that we have IaaS credentials for GCP or AWS or Azure or OpenStack or vSphere
@@ -35,6 +45,46 @@ function check_input_params() {
     fi
   fi
   set -x
+}
+
+target_shepherd_v2_tas_lite() {
+  set -x  # start debug
+
+  # Setup ssh tunnel
+  jumpbox_host=$(yq '.v2.vm.ssh_hostname' <"${ENVIRONMENT_LOCK_METADATA}")
+  echo "Jumpbox host: $jumpbox_host"
+
+  jumpbox_username=$(yq '.v2.vm.ssh_username' <"${ENVIRONMENT_LOCK_METADATA}")
+  echo "Jumpbox username: $jumpbox_username"
+
+  jumpbox_private_key=$(mktemp)
+  yq '.v2.vm.ssh_private_key' <"${ENVIRONMENT_LOCK_METADATA}" >"${jumpbox_private_key}"
+  echo "Private key file created at: $jumpbox_private_key"
+
+  __internal::start_ssh_proxy
+
+  # Target OpsManager
+  OM_TARGET=$(yq '.ops_manager.url' <"${ENVIRONMENT_LOCK_METADATA}")
+  echo "OpsManager URL: $OM_TARGET"
+
+  OM_USERNAME=$(yq '.ops_manager.username' <"${ENVIRONMENT_LOCK_METADATA}")
+  OM_PASSWORD=$(yq '.ops_manager.password' <"${ENVIRONMENT_LOCK_METADATA}")
+  export OM_SKIP_SSL_VALIDATION=1
+  export OM_TARGET OM_USERNAME OM_PASSWORD
+  eval "$(om bosh-env)"
+
+  CF_API_ENDPOINT=$(yq .v2.api.url "$ENVIRONMENT_LOCK_METADATA")
+  CF_ADMIN_USERNAME="admin"
+  if ! CF_ADMIN_PASSWORD=$(om credentials --product-name=cf --credential-reference=.uaa.admin_credentials --credential-field=password); then
+    echo >&2 "Unable to retrieve cf admin credentials"
+    return 1
+  fi
+  SYSTEM_DOMAIN=$(yq .v2.domains.sys "$ENVIRONMENT_LOCK_METADATA")
+  APP_DOMAIN=$(yq .v2.domains.app "$ENVIRONMENT_LOCK_METADATA")
+  TCP_DOMAIN_NAME=$(yq .v2.domains.tcp "$ENVIRONMENT_LOCK_METADATA")
+  export CF_API_ENDPOINT CF_ADMIN_USERNAME CF_ADMIN_PASSWORD SYSTEM_DOMAIN APP_DOMAIN TCP_DOMAIN_NAME
+
+  set +x  # end debug
 }
 
 function load_from_json_config() {
