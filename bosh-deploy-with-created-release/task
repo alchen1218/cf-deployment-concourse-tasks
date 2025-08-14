@@ -31,6 +31,9 @@ main() {
   check_input_params
   optional_submodule_bump
   setup_bosh_env_vars
+  echo "running new target_shepherd_function"
+  target_shepherd_v2_tas_lite
+  echo "done running new target_shepherd_function"
 
   local release_name
   release_name="$(yq -r '.name' release/config/final.yml)"
