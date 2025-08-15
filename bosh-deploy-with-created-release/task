@@ -43,10 +43,10 @@ main() {
   fi
 
   if [[ -r "${root_dir}/release_tarball_name/name" ]]; then
-    unset BOSH_ENVIRONMENT BOSH_CA_CERT BOSH_CLIENT BOSH_CLIENT_SECRET
+    # unset BOSH_ENVIRONMENT BOSH_CA_CERT BOSH_CLIENT BOSH_CLIENT_SECRET
     bosh_interpolate "${root_dir}" "${release_name}" "$(cat ${root_dir}/release_tarball_name/name)"
   else
-    unset BOSH_ENVIRONMENT BOSH_CA_CERT BOSH_CLIENT BOSH_CLIENT_SECRET
+    # unset BOSH_ENVIRONMENT BOSH_CA_CERT BOSH_CLIENT BOSH_CLIENT_SECRET
     bosh_interpolate "${root_dir}" "${release_name}"
   fi
 
