@@ -453,19 +453,23 @@ upload_stemcell() {
   set -e
 
   local stemcell_name
-
   local infrastructure
-  if [ "${BOSH_LITE}" == "true"  ]; then
+
+  echo "DEBUG: BOSH_LITE=${BOSH_LITE}"
+  echo "DEBUG: SHEPHERD_POOL=${SHEPHERD_POOL}"
+  echo "DEBUG: Checking for toolsmiths-env directory..."
+
+  if [ "${BOSH_LITE}" == "true" ] || [[ "$SHEPHERD_POOL" == *"lite"* ]] || [[ "$SHEPHERD_POOL" == "cfd" ]]; then
     infrastructure="bosh-lite"
     stemcell_name="bosh-warden-boshlite"
-  elif [ -n "$SHEPHERD_POOL" ] && { [[ "$SHEPHERD_POOL" == *"lite"* ]] || [[ "$SHEPHERD_POOL" == "cfd" ]]; }; then
-    infrastructure="bosh-lite"
-    stemcell_name="bosh-warden-boshlite"
-  elif [ -d toolsmiths-env ]; then
+    echo "DEBUG: Using SHEPHERD_POOL ($SHEPHERD_POOL), stemcell=${stemcell_name}, infrastructure=${infrastructure}"
+  elif [ -d toolsmiths-env ] || [ "$(jq -r .iaas bbl-state/${BBL_STATE_DIR}/bbl-state.json)" = "gcp" ]; then
     infrastructure="gcp"
     stemcell_name="bosh-google-kvm"
+    echo "DEBUG: Found toolsmiths-env directory, stemcell=${stemcell_name}, infrastructure=${infrastructure}"
   else
     infrastructure="$(jq -r .iaas bbl-state/${BBL_STATE_DIR}/bbl-state.json)"
+    echo "DEBUG: IAAS from bbl-state=${infrastructure}"
 
     if [ "$infrastructure" = "aws" ]; then
       stemcell_name="bosh-aws-xen-hvm"
@@ -478,6 +482,7 @@ upload_stemcell() {
     elif [ "$infrastructure" = "openstack" ]; then
       stemcell_name="bosh-openstack-kvm"
     fi
+    echo "DEBUG: Selected stemcell=${stemcell_name} for infrastructure=${infrastructure}"
   fi
 
   stemcell_name="${stemcell_name}-${os}-go_agent"
