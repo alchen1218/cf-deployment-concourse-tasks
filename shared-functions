@@ -439,6 +439,10 @@ upload_stemcell() {
   local stemcells_url
   stemcells_url="https://bosh.io/d/stemcells"
 
+  if [ -z "$SHEPHERD_POOL" ] && [ -f shepherd/lease.yml ]; then
+    SHEPHERD_POOL=$(yq -r '.pool.name' shepherd/lease.yml 2>/dev/null)
+  fi
+
   # Ask bosh if it already has our OS / version stemcell combination
   # As of this writing, the new bosh cli doesn't have --skip-if-exists
   set +e
@@ -450,6 +454,9 @@ upload_stemcell() {
 
   local infrastructure
   if [ "${BOSH_LITE}" == "true"  ]; then
+    infrastructure="bosh-lite"
+    stemcell_name="bosh-warden-boshlite"
+  elif [ -n "$SHEPHERD_POOL" ] && [[ "$SHEPHERD_POOL" == *"lite"* ]]; then
     infrastructure="bosh-lite"
     stemcell_name="bosh-warden-boshlite"
   elif [ -d toolsmiths-env ]; then
