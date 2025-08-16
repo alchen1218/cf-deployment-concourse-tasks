@@ -439,12 +439,6 @@ upload_stemcell() {
   local stemcells_url
   stemcells_url="https://bosh.io/d/stemcells"
 
-  SHEPHERD_POOL="${SHEPHERD_POOL:-}"
-
-  if [ -z "$SHEPHERD_POOL" ] && [ -f shepherd/lease.yml ]; then
-    SHEPHERD_POOL=$(yq -r '.pool.name' shepherd/lease.yml 2>/dev/null)
-  fi
-
   # Ask bosh if it already has our OS / version stemcell combination
   # As of this writing, the new bosh cli doesn't have --skip-if-exists
   set +e
