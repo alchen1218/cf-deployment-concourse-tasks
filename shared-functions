@@ -301,6 +301,14 @@ function bosh_deploy() {
   local deployment_name
   deployment_name=$(bosh interpolate "${INTERPOLATED_MANIFEST}" --path /name)
 
+  # Debug step: Check vm_extensions in current cloud config
+  echo "=== DEBUG: Dumping vm_extensions from current cloud config ==="
+  bosh cloud-config > current-cloud-config.yml
+  grep -A5 "vm_extensions:" current-cloud-config.yml || echo "No vm_extensions found."
+  grep -A5 "diego-ssh-proxy-network-properties" current-cloud-config.yml || echo "diego-ssh-proxy-network-properties not found."
+  echo "============================================================="
+  
+
   if ${DEPLOY_WITH_UPTIME_MEASUREMENTS}; then
     uptimer_bosh_deploy ${@}
   else
