@@ -466,6 +466,10 @@ upload_stemcell() {
 
   if [ "${BOSH_LITE}" == "true" ] || [[ "$SHEPHERD_POOL" == *"lite"* ]] || [[ "$SHEPHERD_POOL" == "cfd" ]]; then
     infrastructure="bosh-lite"
+    if [[ "${WINDOWS_STEMCELL_VERSION:-}" != "" ]]; then
+      echo "ERROR: Windows stemcells are not available for bosh-lite/warden. Use Ubuntu instead or switch IaaS." >&2
+      exit 2
+    fi
     stemcell_name="bosh-warden-boshlite"
     echo "DEBUG: Using SHEPHERD_POOL ($SHEPHERD_POOL), stemcell=${stemcell_name}, infrastructure=${infrastructure}"
   elif [ -d toolsmiths-env ] || [ "$(jq -r .iaas bbl-state/${BBL_STATE_DIR}/bbl-state.json)" = "gcp" ]; then
