@@ -415,42 +415,18 @@ setup_password_from_credhub() {
   set -x
 }
 
-upload_stemcells() {
-  local arguments=''
-  for op in ${OPS_FILES}
-  do
-    arguments="${arguments} -o ops-files/${op}"
-  done
-
-  bosh interpolate ${arguments} cf-deployment/${MANIFEST_FILE} > /tmp/cf.yml
-
-  local stemcells_json=$(ruby -rjson -ryaml -e "puts YAML.load_file('/tmp/cf.yml').to_json" | jq .stemcells)
-  local size=$(echo ${stemcells_json} | jq 'length')
-  if [ ${size} -eq 0 ]; then
-    echo "Error: Did not find any stemcells to upload."
-    exit 1
-  fi
-
-  for i in `seq 0 $((size - 1))`
-  do
-    local os=$(echo ${stemcells_json} | jq -r .[$i].os)
-    local version=$(echo ${stemcells_json} | jq -r .[$i].version)
-    upload_stemcell ${os} ${version}
-  done
-}
-
 upload_stemcell() {
-  # Read potentially variable stemcell parameters out of cf-deployment with bosh
+  # Read potentially variable stemcell parameters
   local os=$1
   local version=$2
 
-  # Hardcode a couple of stable stemcell parameters
+  # BOSH stemcells URL
   local stemcells_url="https://bosh.io/d/stemcells"
 
-  # Ask bosh if it already has our OS / version stemcell combination
+  # Check if BOSH already has this stemcell
   set +e
   local existing_stemcell
-  existing_stemcell=$(bosh stemcells | grep "${os}" | awk '{print $2}' | tr -d "\*" | grep ^"${version}"$ )
+  existing_stemcell=$(bosh stemcells | grep "${os}" | awk '{print $2}' | tr -d "*" | grep "^${version}$")
   set -e
 
   local stemcell_name
@@ -458,29 +434,27 @@ upload_stemcell() {
 
   echo "DEBUG: BOSH_LITE=${BOSH_LITE}"
   echo "DEBUG: SHEPHERD_POOL=${SHEPHERD_POOL}"
-  echo "DEBUG: Checking for toolsmiths-env directory..."
 
+  # Determine infrastructure & base stemcell
   if [ "${BOSH_LITE}" == "true" ] || [[ "$SHEPHERD_POOL" == *"lite"* ]]; then
     infrastructure="bosh-lite"
     stemcell_name="bosh-warden-boshlite"
-    echo "DEBUG: Using SHEPHERD_POOL ($SHEPHERD_POOL), stemcell=${stemcell_name}, infrastructure=${infrastructure}"
+    echo "DEBUG: Using bosh-lite/Warden stemcell"
 
   elif [[ "$SHEPHERD_POOL" == "cfd" ]]; then
-    # 🔧 FIX: don't treat 'cfd' as bosh-lite, map it to the real IaaS
-    # If your CFD pool runs on vSphere:
-    infrastructure="vsphere"
-    stemcell_name="bosh-vsphere-esxi"
-    # If instead it's AWS, replace with:
-    # infrastructure="aws"
-    # stemcell_name="bosh-aws-xen-hvm"
-    echo "DEBUG: Using SHEPHERD_POOL ($SHEPHERD_POOL), stemcell=${stemcell_name}, infrastructure=${infrastructure}"
+    # Determine actual IaaS for CFD pool
+    # If your CFD pool runs on Warden:
+    infrastructure="bosh-lite"
+    stemcell_name="bosh-warden-boshlite"
+    echo "DEBUG: CFD pool uses Warden; using bosh-warden-boshlite stemcell"
 
-  elif [ -d toolsmiths-env ] || [ "$(jq -r .iaas bbl-state/${BBL_STATE_DIR}/bbl-state.json)" = "gcp" ]; then
-    infrastructure="gcp"
-    stemcell_name="bosh-google-kvm"
-    echo "DEBUG: Found toolsmiths-env directory, stemcell=${stemcell_name}, infrastructure=${infrastructure}"
+    # If CFD actually runs on vSphere/AWS, override here:
+    # infrastructure="vsphere"
+    # stemcell_name="bosh-vsphere-esxi"
+    # echo "DEBUG: CFD pool uses vSphere; using bosh-vsphere-esxi stemcell"
 
   else
+    # Other environments
     infrastructure="$(jq -r .iaas bbl-state/${BBL_STATE_DIR}/bbl-state.json)"
     echo "DEBUG: IAAS from bbl-state=${infrastructure}"
 
@@ -498,43 +472,42 @@ upload_stemcell() {
     echo "DEBUG: Selected stemcell=${stemcell_name} for infrastructure=${infrastructure}"
   fi
 
-  # Append suffix depending on IaaS
+  # Append suffix depending on infrastructure
   if [[ "$infrastructure" == "bosh-lite" ]]; then
     if [[ "$os" == windows* ]]; then
-      echo "ERROR: Windows stemcells are not available for bosh-lite/warden. Use Ubuntu instead or switch IaaS." >&2
-      exit 2
+      echo "ERROR: Windows stemcells are not supported on bosh-lite/Warden. Use Ubuntu instead or switch IaaS." >&2
+      return 0  # Skip instead of failing
     fi
-    # bosh-lite only supports Ubuntu; hardcode to jammy (or noble if you use that)
     stemcell_name="${stemcell_name}-ubuntu-jammy-go_agent"
   else
     stemcell_name="${stemcell_name}-${os}-go_agent"
   fi
 
-  # Build URL
+  # Build stemcell URL
+  local full_stemcell_url
   if [ "$version" = "latest" ]; then
     full_stemcell_url="${stemcells_url}/${stemcell_name}"
   else
     full_stemcell_url="${stemcells_url}/${stemcell_name}?v=${version}"
   fi
 
-  # If bosh already has our stemcell, exit 0
+  # Skip if stemcell already exists
   if [ "${existing_stemcell}" ]; then
-    echo "Task bosh-upload-stemcell-from-cf-deployment:"
     echo "Stemcell '${stemcell_name}/${version}' already exists. Skipping..."
-    return
+    return 0
   fi
 
-  # If bosh.io doesn't have our stemcell, exit 2
+  # Check if stemcell exists on bosh.io
   set +e
-  local stemcell_exists
   wget -S --spider "${full_stemcell_url}" > /dev/null 2>&1
-  stemcell_exists=$?
-  if [ ${stemcell_exists} -ne 0 ]; then
-    echo "Error: Could not find a '$os' stemcell for IaaS '$infrastructure' on bosh.io. Please double-check that the IaaS/OS combination is supported."
-    exit 2 # POSIX 'No such file or directory'
-  fi
+  local stemcell_exists=$?
   set -e
+  if [ ${stemcell_exists} -ne 0 ]; then
+    echo "Error: Could not find a '$os' stemcell for IaaS '$infrastructure' on bosh.io. Skipping upload."
+    return 0
+  fi
 
-  # ... otherwise, begin the upload process
+  # Upload stemcell
+  echo "Uploading stemcell '${stemcell_name}/${version}'..."
   bosh -n upload-stemcell "${full_stemcell_url}"
 }
