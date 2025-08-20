@@ -440,15 +440,14 @@ upload_stemcells() {
 }
 
 upload_stemcell() {
-  # Read potentially variable stemcell paramaters out of cf-deployment with bosh
+  # Read potentially variable stemcell parameters out of cf-deployment with bosh
   local os=$1
   local version=$2
 
-  # Hardcode a couple of stable stemcell paramaters
+  # Hardcode a couple of stable stemcell parameters
   local stemcells_url="https://bosh.io/d/stemcells"
 
   # Ask bosh if it already has our OS / version stemcell combination
-  # As of this writing, the new bosh cli doesn't have --skip-if-exists
   set +e
   local existing_stemcell
   existing_stemcell=$(bosh stemcells | grep "${os}" | awk '{print $2}' | tr -d "\*" | grep ^"${version}"$ )
@@ -461,14 +460,26 @@ upload_stemcell() {
   echo "DEBUG: SHEPHERD_POOL=${SHEPHERD_POOL}"
   echo "DEBUG: Checking for toolsmiths-env directory..."
 
-  if [ "${BOSH_LITE}" == "true" ] || [[ "$SHEPHERD_POOL" == *"lite"* ]] || [[ "$SHEPHERD_POOL" == "cfd" ]]; then
+  if [ "${BOSH_LITE}" == "true" ] || [[ "$SHEPHERD_POOL" == *"lite"* ]]; then
     infrastructure="bosh-lite"
     stemcell_name="bosh-warden-boshlite"
     echo "DEBUG: Using SHEPHERD_POOL ($SHEPHERD_POOL), stemcell=${stemcell_name}, infrastructure=${infrastructure}"
+
+  elif [[ "$SHEPHERD_POOL" == "cfd" ]]; then
+    # 🔧 FIX: don't treat 'cfd' as bosh-lite, map it to the real IaaS
+    # If your CFD pool runs on vSphere:
+    infrastructure="vsphere"
+    stemcell_name="bosh-vsphere-esxi"
+    # If instead it's AWS, replace with:
+    # infrastructure="aws"
+    # stemcell_name="bosh-aws-xen-hvm"
+    echo "DEBUG: Using SHEPHERD_POOL ($SHEPHERD_POOL), stemcell=${stemcell_name}, infrastructure=${infrastructure}"
+
   elif [ -d toolsmiths-env ] || [ "$(jq -r .iaas bbl-state/${BBL_STATE_DIR}/bbl-state.json)" = "gcp" ]; then
     infrastructure="gcp"
     stemcell_name="bosh-google-kvm"
     echo "DEBUG: Found toolsmiths-env directory, stemcell=${stemcell_name}, infrastructure=${infrastructure}"
+
   else
     infrastructure="$(jq -r .iaas bbl-state/${BBL_STATE_DIR}/bbl-state.json)"
     echo "DEBUG: IAAS from bbl-state=${infrastructure}"
