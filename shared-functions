@@ -494,7 +494,15 @@ upload_stemcell() {
     echo "DEBUG: Selected stemcell=${stemcell_name} for infrastructure=${infrastructure}"
   fi
 
-  stemcell_name="${stemcell_name}-${os}-go_agent"
+  # Append suffix depending on IaaS
+  if [[ "$infrastructure" == "bosh-lite" ]]; then
+    # bosh-lite only supports Ubuntu; hardcode to jammy (or noble if that’s what you use)
+    stemcell_name="${stemcell_name}-ubuntu-jammy-go_agent"
+  else
+    stemcell_name="${stemcell_name}-${os}-go_agent"
+  fi
+
+  # Build URL
   if [ "$version" = "latest" ]; then
     full_stemcell_url="${stemcells_url}/${stemcell_name}"
   else
@@ -504,7 +512,7 @@ upload_stemcell() {
   # If bosh already has our stemcell, exit 0
   if [ "${existing_stemcell}" ]; then
     echo "Task bosh-upload-stemcell-from-cf-deployment:"
-    echo "Stemcell '${stemcell_name}/${version}' already exists.  Skipping..."
+    echo "Stemcell '${stemcell_name}/${version}' already exists. Skipping..."
     return
   fi
 
