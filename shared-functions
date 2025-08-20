@@ -441,14 +441,11 @@ upload_stemcells() {
 
 upload_stemcell() {
   # Read potentially variable stemcell paramaters out of cf-deployment with bosh
-  local os
-  os=$1
-  local version
-  version=$2
+  local os=$1
+  local version=$2
 
   # Hardcode a couple of stable stemcell paramaters
-  local stemcells_url
-  stemcells_url="https://bosh.io/d/stemcells"
+  local stemcells_url="https://bosh.io/d/stemcells"
 
   # Ask bosh if it already has our OS / version stemcell combination
   # As of this writing, the new bosh cli doesn't have --skip-if-exists
@@ -466,10 +463,6 @@ upload_stemcell() {
 
   if [ "${BOSH_LITE}" == "true" ] || [[ "$SHEPHERD_POOL" == *"lite"* ]] || [[ "$SHEPHERD_POOL" == "cfd" ]]; then
     infrastructure="bosh-lite"
-    if [[ "${WINDOWS_STEMCELL_VERSION:-}" != "" ]]; then
-      echo "ERROR: Windows stemcells are not available for bosh-lite/warden. Use Ubuntu instead or switch IaaS." >&2
-      exit 2
-    fi
     stemcell_name="bosh-warden-boshlite"
     echo "DEBUG: Using SHEPHERD_POOL ($SHEPHERD_POOL), stemcell=${stemcell_name}, infrastructure=${infrastructure}"
   elif [ -d toolsmiths-env ] || [ "$(jq -r .iaas bbl-state/${BBL_STATE_DIR}/bbl-state.json)" = "gcp" ]; then
@@ -496,7 +489,11 @@ upload_stemcell() {
 
   # Append suffix depending on IaaS
   if [[ "$infrastructure" == "bosh-lite" ]]; then
-    # bosh-lite only supports Ubuntu; hardcode to jammy (or noble if that’s what you use)
+    if [[ "$os" == windows* ]]; then
+      echo "ERROR: Windows stemcells are not available for bosh-lite/warden. Use Ubuntu instead or switch IaaS." >&2
+      exit 2
+    fi
+    # bosh-lite only supports Ubuntu; hardcode to jammy (or noble if you use that)
     stemcell_name="${stemcell_name}-ubuntu-jammy-go_agent"
   else
     stemcell_name="${stemcell_name}-${os}-go_agent"
@@ -523,13 +520,10 @@ upload_stemcell() {
   stemcell_exists=$?
   if [ ${stemcell_exists} -ne 0 ]; then
     echo "Error: Could not find a '$os' stemcell for IaaS '$infrastructure' on bosh.io. Please double-check that the IaaS/OS combination is supported."
-    exit 2 #POSIX 'No such file or directory'
+    exit 2 # POSIX 'No such file or directory'
   fi
   set -e
 
   # ... otherwise, begin the upload process
-  bosh \
-    -n \
-    upload-stemcell \
-    "${full_stemcell_url}"
+  bosh -n upload-stemcell "${full_stemcell_url}"
 }
