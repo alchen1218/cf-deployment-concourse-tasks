@@ -59,6 +59,7 @@ main() {
   # shellcheck disable=SC2086
   echo "i am here, right about to bosh deploy"
   bosh_deploy ${BOSH_DEPLOY_ARGS}
+  echo "i am here, right after the bosh deploy"
 }
 
 main "${PWD}"
