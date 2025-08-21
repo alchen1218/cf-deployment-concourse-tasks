@@ -310,18 +310,23 @@ function bosh_deploy() {
   grep -A5 "vm_extensions:" current-cloud-config.yml || echo "No vm_extensions found."
   grep -A5 "diego-ssh-proxy-network-properties" current-cloud-config.yml || echo "diego-ssh-proxy-network-properties not found."
   echo "============================================================="
+  echo "check current cloud cofigs"
+  cat current-cloud-config.yml
+  echo "============================================================="
 
 
   if ${DEPLOY_WITH_UPTIME_MEASUREMENTS}; then
     uptimer_bosh_deploy ${@}
   else
     pushd cf-deployment > /dev/null
+      echo "================before bosh deploy command================"
       bosh \
         -n \
         -d "${deployment_name}" \
         deploy \
         "${INTERPOLATED_MANIFEST}" \
         ${@}
+        echo "================after bosh deploy command================"
     popd
   fi
 }
