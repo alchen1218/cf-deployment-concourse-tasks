@@ -322,21 +322,11 @@ function bosh_deploy() {
   echo "========================111111===================================="
   # add new vm_extension with correct syntax into cloud-config
 
-  # backup your file first
-  cp current-cloud-config.yml current-cloud-config.yml.bak
-
-  # insert diego-ssh-proxy-network-properties after "vm_extensions:" line
-  awk '
-    /^vm_extensions:/ {
-      print
-      print "- name: diego-ssh-proxy-network-properties"
-      print "  cloud_properties:"
-      print "    ports:"
-      print "    - host: 2222"
-      next
-    }
-    { print }
-  ' current-cloud-config.yml > tmp.yml && mv tmp.yml current-cloud-config.yml
+  sed -i '/^vm_extensions:/a\
+  - name: diego-ssh-proxy-network-properties-testtttt\
+    cloud_properties:\
+      ports:\
+      - host: 2222' current-cloud-config.yml
 
   echo "=========================11111===================================="
   # upload the modified config to BOSH
