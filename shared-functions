@@ -323,7 +323,7 @@ function bosh_deploy() {
   # add new vm_extension with correct syntax into cloud-config
 
   sed -i '/^vm_extensions:/a\
-  - name: diego-ssh-proxy-network-properties-testtttt\
+  - name: diego-ssh-proxy-network-properties\
     cloud_properties:\
       ports:\
       - host: 2222' current-cloud-config.yml
