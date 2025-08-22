@@ -321,14 +321,14 @@ function bosh_deploy() {
 
   echo "========================111111===================================="
   # add diego-ssh-proxy-network-properties only if it doesn't exist
-  yq e -i '.vm_extensions += [{"name":"diego-ssh-proxy-network-properties","cloud_properties":{"ports":[{"host":2222}]}}]' current-cloud-config.yml
+  # yq e -i '.vm_extensions += [{"name":"diego-ssh-proxy-network-properties","cloud_properties":{"ports":[{"host":2222}]}}]' current-cloud-config.yml
   echo "=========================11111===================================="
 
   echo "============ current-cloud-config.yml start ================="
   cat current-cloud-config.yml
   echo "============ current-cloud-config.yml done ================="
   # upload the modified config to BOSH
-  bosh update-cloud-config current-cloud-config.yml
+  bosh update-cloud-config current-cloud-config.yml --non-interactive
   echo "============================================================="
 
 
