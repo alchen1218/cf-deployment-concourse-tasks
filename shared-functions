@@ -321,8 +321,13 @@ function bosh_deploy() {
 
   echo "========================111111===================================="
   # add diego-ssh-proxy-network-properties only if it doesn't exist
-  yq e -i '.vm_extensions += [{"name":"diego-ssh-proxy-network-properties","cloud_properties":{"ports":[{"host":2222}]}}]' current-cloud-config.yml
-  yq e -i '.vm_extensions += [{"name":"cf-router-network-properties","cloud_properties":{"ports":[{"host":2222}]}}]' current-cloud-config.yml
+  # yq e -i '.vm_extensions += [{"name":"diego-ssh-proxy-network-properties","cloud_properties":{"ports":[{"host":2222}]}}]' current-cloud-config.yml
+  # yq e -i '.vm_extensions += [{"name":"cf-router-network-properties","cloud_properties":{"ports":[{"host":2222}]}}]' current-cloud-config.yml
+  yq e -i '(.vm_extensions[] | select(.name == "diego-ssh-proxy-network-properties").cloud_properties.ports) = [2222]' current-cloud-config.yml
+
+  # fix cf-router
+  yq e -i '(.vm_extensions[] | select(.name == "cf-router-network-properties").cloud_properties.ports) = [80, 443]' current-cloud-config.yml
+  
   echo "=========================11111===================================="
 
   echo "============ current-cloud-config.yml start ================="
