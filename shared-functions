@@ -449,8 +449,10 @@ upload_stemcells() {
 
   bosh interpolate ${arguments} cf-deployment/${MANIFEST_FILE} > /tmp/cf.yml
 
-  local stemcells_json=$(ruby -rjson -ryaml -e "puts YAML.load_file('/tmp/cf.yml').to_json" | jq .stemcells)
-  local size=$(echo ${stemcells_json} | jq 'length')
+  local stemcells_json
+  stemcells_json=$(ruby -rjson -ryaml -e "puts YAML.load_file('/tmp/cf.yml').to_json" | jq .stemcells)
+  local size
+  size=$(echo ${stemcells_json} | jq 'length')
   if [ ${size} -eq 0 ]; then
     echo "Error: Did not find any stemcells to upload."
     exit 1
@@ -458,8 +460,10 @@ upload_stemcells() {
 
   for i in `seq 0 $((size - 1))`
   do
-    local os=$(echo ${stemcells_json} | jq -r .[$i].os)
-    local version=$(echo ${stemcells_json} | jq -r .[$i].version)
+    local os
+    os=$(echo ${stemcells_json} | jq -r .[$i].os)
+    local version
+    version=$(echo ${stemcells_json} | jq -r .[$i].version)
     upload_stemcell ${os} ${version}
   done
 }
@@ -467,8 +471,13 @@ upload_stemcells() {
 upload_stemcell() {
   local os=$1
   local version=$2
-
   local stemcells_url="https://bosh.io/d/stemcells"
+
+  # Skip Windows stemcells entirely
+  if [[ "$os" == windows* ]]; then
+    echo "INFO: Skipping Windows stemcell for OS '$os'"
+    return 0
+  fi
 
   # Check if BOSH already has this stemcell
   set +e
@@ -479,20 +488,14 @@ upload_stemcell() {
   local stemcell_name
   local infrastructure
 
-  echo "DEBUG: BOSH_LITE=${BOSH_LITE}"
-  echo "DEBUG: SHEPHERD_POOL=${SHEPHERD_POOL}"
-
-  # Determine infrastructure & base stemcell
-  if [ "${BOSH_LITE}" == "true" ] || [[ "$SHEPHERD_POOL" == *"lite"* ]]; then
+  if [ "${BOSH_LITE}" == "true" ]; then
     infrastructure="bosh-lite"
     stemcell_name="bosh-warden-boshlite"
     echo "DEBUG: Using bosh-lite/Warden stemcell"
-
   elif [[ "$SHEPHERD_POOL" == "cfd" ]]; then
     infrastructure="bosh-lite"
     stemcell_name="bosh-warden-boshlite"
     echo "DEBUG: CFD pool uses Warden; using bosh-warden-boshlite stemcell"
-
   else
     infrastructure="$(jq -r .iaas bbl-state/${BBL_STATE_DIR}/bbl-state.json)"
     echo "DEBUG: IAAS from bbl-state=${infrastructure}"
@@ -508,21 +511,10 @@ upload_stemcell() {
     elif [ "$infrastructure" = "openstack" ]; then
       stemcell_name="bosh-openstack-kvm"
     fi
-    echo "DEBUG: Selected stemcell=${stemcell_name} for infrastructure=${infrastructure}"
   fi
 
   # Finalize stemcell name
-  if [ "${os}" = "ubuntu-noble" ]; then
-    stemcell_name="${stemcell_name}-${os}"
-  else
-    stemcell_name="${stemcell_name}-${os}-go_agent"
-  fi
-
-  # Extra guard: Windows on bosh-lite is not supported
-  if [[ "$infrastructure" == "bosh-lite" && "$os" == windows* ]]; then
-    echo "ERROR: Windows stemcells are not supported on bosh-lite/Warden. Skipping..."
-    return 0
-  fi
+  stemcell_name="${stemcell_name}-${os}-go_agent"
 
   # Build stemcell URL
   local full_stemcell_url
@@ -534,6 +526,7 @@ upload_stemcell() {
 
   # Skip if stemcell already exists
   if [ "${existing_stemcell}" ]; then
+    echo "Task bosh-upload-stemcell-from-cf-deployment:"
     echo "Stemcell '${stemcell_name}/${version}' already exists. Skipping..."
     return 0
   fi
@@ -544,7 +537,7 @@ upload_stemcell() {
   local stemcell_exists=$?
   set -e
   if [ ${stemcell_exists} -ne 0 ]; then
-    echo "Error: Could not find a '$os' stemcell for IaaS '$infrastructure' on bosh.io. Skipping upload."
+    echo "INFO: Stemcell '${os}/${version}' not found on bosh.io. Skipping upload."
     return 0
   fi
 
