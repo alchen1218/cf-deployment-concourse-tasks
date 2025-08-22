@@ -465,11 +465,9 @@ upload_stemcells() {
 }
 
 upload_stemcell() {
-  # Read potentially variable stemcell parameters
   local os=$1
   local version=$2
 
-  # BOSH stemcells URL
   local stemcells_url="https://bosh.io/d/stemcells"
 
   # Check if BOSH already has this stemcell
@@ -491,19 +489,11 @@ upload_stemcell() {
     echo "DEBUG: Using bosh-lite/Warden stemcell"
 
   elif [[ "$SHEPHERD_POOL" == "cfd" ]]; then
-    # Determine actual IaaS for CFD pool
-    # If your CFD pool runs on Warden:
     infrastructure="bosh-lite"
     stemcell_name="bosh-warden-boshlite"
     echo "DEBUG: CFD pool uses Warden; using bosh-warden-boshlite stemcell"
 
-    # If CFD actually runs on vSphere/AWS, override here:
-    # infrastructure="vsphere"
-    # stemcell_name="bosh-vsphere-esxi"
-    # echo "DEBUG: CFD pool uses vSphere; using bosh-vsphere-esxi stemcell"
-
   else
-    # Other environments
     infrastructure="$(jq -r .iaas bbl-state/${BBL_STATE_DIR}/bbl-state.json)"
     echo "DEBUG: IAAS from bbl-state=${infrastructure}"
 
@@ -521,15 +511,17 @@ upload_stemcell() {
     echo "DEBUG: Selected stemcell=${stemcell_name} for infrastructure=${infrastructure}"
   fi
 
-  # Append suffix depending on infrastructure
-  if [[ "$infrastructure" == "bosh-lite" ]]; then
-    if [[ "$os" == windows* ]]; then
-      echo "ERROR: Windows stemcells are not supported on bosh-lite/Warden. Use Ubuntu instead or switch IaaS." >&2
-      return 0  # Skip instead of failing
-    fi
-    stemcell_name="${stemcell_name}-ubuntu-jammy-go_agent"
+  # Finalize stemcell name
+  if [ "${os}" = "ubuntu-noble" ]; then
+    stemcell_name="${stemcell_name}-${os}"
   else
     stemcell_name="${stemcell_name}-${os}-go_agent"
+  fi
+
+  # Extra guard: Windows on bosh-lite is not supported
+  if [[ "$infrastructure" == "bosh-lite" && "$os" == windows* ]]; then
+    echo "ERROR: Windows stemcells are not supported on bosh-lite/Warden. Skipping..."
+    return 0
   fi
 
   # Build stemcell URL
