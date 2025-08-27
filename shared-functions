@@ -85,21 +85,7 @@ function set_git_config() {
 function setup_bosh_env_vars() {
   set +x
   if [ -d toolsmiths-env ]; then
-
-    echo "==================================================="
-    echo "==================================================="
-    echo "DEBUG: Found toolsmiths-env directory"
-    echo "DEBUG: Metadata contents:"
-    cat toolsmiths-env/metadata | jq .
-    echo "DEBUG: Running bbl print-env with metadata file"
-
     eval "$(bbl print-env --metadata-file toolsmiths-env/metadata)"
-
-    echo "DEBUG: BOSH_ENVIRONMENT is now: $BOSH_ENVIRONMENT"
-
-    echo "==================================================="
-    echo "==================================================="
-
     export SYSTEM_DOMAIN="$(cat toolsmiths-env/metadata | jq -r '.cf.api_url | sub("api."; "")')"
     export TCP_DOMAIN="tcp.${SYSTEM_DOMAIN}"
   else
@@ -299,60 +285,18 @@ function uptimer_bosh_deploy() {
 
 function bosh_deploy() {
   local deployment_name
-  echo "i am here, right before setting deployment name"
   deployment_name=$(bosh interpolate "${INTERPOLATED_MANIFEST}" --path /name)
-
-  echo "i am here, right after setting deployment name: ${deployment_name}"
-
-  # Debug step: Check vm_extensions in current cloud config
-  echo "=== DEBUG: Dumping vm_extensions from current cloud config ==="
-
-
-
-  bosh cloud-config > current-cloud-config.yml
-  grep -A5 "vm_extensions:" current-cloud-config.yml || echo "No vm_extensions found."
-  grep -A5 "diego-ssh-proxy-network-properties" current-cloud-config.yml || echo "diego-ssh-proxy-network-properties not found."
-
-
-
-  echo "============================================================="
-  echo "check current cloud configs"
-  bosh cloud-config > current-cloud-config.yml
-
-  echo "========================111111===================================="
-  # add diego-ssh-proxy-network-properties only if it doesn't exist
-  yq e -i '.vm_extensions += [{"name":"diego-ssh-proxy-network-properties","cloud_properties":{"ports":[{"host":2222}]}}]' current-cloud-config.yml
-  yq e -i '.vm_extensions += [{"name":"cf-router-network-properties","cloud_properties":{"ports":[{"host":2222}]}}]' current-cloud-config.yml
-
-  # fix cf-router
-  yq e -i '(.vm_extensions[] | select(.name == "cf-router-network-properties").cloud_properties.ports) = [80, 443]' current-cloud-config.yml
-  
-  echo "=========================11111===================================="
-
-  echo "============ current-cloud-config.yml start ================="
-  cat current-cloud-config.yml
-  echo "============ current-cloud-config.yml done ================="
-  # upload the modified config to BOSH
-  bosh update-cloud-config current-cloud-config.yml --non-interactive
-  echo "============================================================="
-
 
   if ${DEPLOY_WITH_UPTIME_MEASUREMENTS}; then
     uptimer_bosh_deploy ${@}
   else
     pushd cf-deployment > /dev/null
-      echo "================check stemcells================"
-      bosh stemcells
-      echo "================check interpolated manifest================"
-      echo "${INTERPOLATED_MANIFEST}"
-      echo "================before bosh deploy command================"
       bosh \
         -n \
         -d "${deployment_name}" \
         deploy \
         "${INTERPOLATED_MANIFEST}" \
         ${@}
-        echo "================after bosh deploy command================"
     popd
   fi
 }
@@ -471,86 +415,56 @@ upload_stemcells() {
 }
 
 upload_stemcell() {
-  local os=$1
-  local version=$2
+  set -euo pipefail
 
-  local stemcells_url="https://bosh.io/d/stemcells"
+  local stemcell_name infrastructure stemcell_url
 
-  # Ask bosh if it already has our OS / version stemcell combination
-  set +e
-  local existing_stemcell
-  existing_stemcell=$(bosh stemcells | grep "${os}" | awk '{print $2}' | tr -d "\*" | grep ^"${version}"$ )
-  set -e
+  if [ "${BOSH_LITE:-}" == "true" ]; then
+    # For bosh-lite
+    infrastructure="bosh-lite"
+    stemcell_name="bosh-warden-boshlite"
 
-  # Detect infrastructure by asking bosh itself
-  echo "[DEBUG] Detecting infrastructure via bosh env..."
-  local infrastructure
-  local stemcell_name
-  infrastructure=$(bosh env --json | jq -r '.Tables[].Rows[] | .cpi')
+  elif bosh env 2>/dev/null | grep -q "warden"; then
+    # For warden CPI
+    infrastructure="warden"
+    stemcell_name="bosh-warden"
 
-  echo "[DEBUG] bosh env CPI: ${infrastructure}"
+  elif bosh env 2>/dev/null | grep -q "general"; then
+    # For generic CPI
+    infrastructure="general"
+    stemcell_name="bosh-generic"
 
-  case "$infrastructure" in
-    *warden*|*boshlite*)
-      infrastructure="bosh-lite"
-      stemcell_name="bosh-warden-boshlite"
-      ;;
-    *google*)
-      infrastructure="gcp"
-      stemcell_name="bosh-google-kvm"
-      ;;
-    *aws*)
-      infrastructure="aws"
-      stemcell_name="bosh-aws-xen-hvm"
-      ;;
-    *vsphere*)
-      infrastructure="vsphere"
-      stemcell_name="bosh-vsphere-esxi"
-      ;;
-    *azure*)
-      infrastructure="azure"
-      stemcell_name="bosh-azure-hyperv"
-      ;;
-    *openstack*)
-      infrastructure="openstack"
-      stemcell_name="bosh-openstack-kvm"
-      ;;
-    *)
-      echo "[ERROR] Could not detect infrastructure CPI from bosh env!"
-      exit 3
-      ;;
-  esac
+  elif [ -d toolsmiths-env ]; then
+    # For toolsmiths env (default to GCP)
+    infrastructure="gcp"
+    stemcell_name="bosh-google-kvm"
 
-  echo "[DEBUG] Detected infra: ${infrastructure}"
-  echo "[DEBUG] Stemcell base name: ${stemcell_name}"
-
-  stemcell_name="${stemcell_name}-${os}-go_agent"
-  if [ "$version" = "latest" ]; then
-    full_stemcell_url="${stemcells_url}/${stemcell_name}"
   else
-    full_stemcell_url="${stemcells_url}/${stemcell_name}?v=${version}"
+    # Use iaas from bbl-state.json if present
+    infrastructure="$(jq -r .iaas bbl-state/${BBL_STATE_DIR}/bbl-state.json)"
+    case "${infrastructure}" in
+      gcp)       stemcell_name="bosh-google-kvm" ;;
+      aws)       stemcell_name="bosh-aws-xen-hvm" ;;
+      azure)     stemcell_name="bosh-azure-hyperv" ;;
+      vsphere)   stemcell_name="bosh-vsphere-esxi" ;;
+      openstack) stemcell_name="bosh-openstack-kvm" ;;
+      *)
+        echo "❌ Unknown infrastructure: ${infrastructure}" >&2
+        exit 1
+        ;;
+    esac
   fi
 
-  echo "[DEBUG] Full stemcell URL: ${full_stemcell_url}"
+  echo "➡️  Uploading stemcell for infrastructure: ${infrastructure} (${stemcell_name})"
 
-  # If bosh already has our stemcell, exit 0
-  if [ "${existing_stemcell}" ]; then
-    echo "[INFO] Stemcell '${stemcell_name}/${version}' already exists. Skipping..."
-    return
-  fi
+  # Grab latest stemcell version from bosh.io
+  local latest_version
+  latest_version="$(curl -s "https://bosh.io/api/v1/stemcells/${stemcell_name}-ubuntu-jammy-go_agent" \
+                    | jq -r .latest_release.version)"
 
-  # Check if bosh.io has this stemcell
-  set +e
-  wget -S --spider "${full_stemcell_url}" > /dev/null 2>&1
-  local stemcell_exists=$?
-  set -e
+  stemcell_url="https://bosh.io/d/stemcells/${stemcell_name}-ubuntu-jammy-go_agent?v=${latest_version}"
 
-  if [ ${stemcell_exists} -ne 0 ]; then
-    echo "[ERROR] Could not find a '$os' stemcell for IaaS '$infrastructure' on bosh.io."
-    exit 2
-  fi
-
-  # Otherwise, upload it
-  echo "[INFO] Uploading stemcell: ${stemcell_name}/${version}"
-  bosh -n upload-stemcell "${full_stemcell_url}"
+  echo "➡️  Uploading stemcell from: ${stemcell_url}"
+  bosh upload-stemcell "${stemcell_url}" \
+    --sha1 "$(curl -sL "${stemcell_url}.sha1" | awk '{print $1}')"
 }

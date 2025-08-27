@@ -54,6 +54,9 @@ main() {
     remove_credentials_from_credhub
   fi
 
+  echo "this is the go version"
+  go version
+
   export SHEPHERD_POOL=cfd
   upload_stemcells
   # shellcheck disable=SC2086
