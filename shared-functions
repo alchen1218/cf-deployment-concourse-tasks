@@ -392,25 +392,34 @@ setup_password_from_credhub() {
 
 upload_stemcells() {
   local arguments=''
-  for op in ${OPS_FILES}
-  do
+  
+  # Build arguments for ops files
+  for op in ${OPS_FILES}; do
     arguments="${arguments} -o ops-files/${op}"
   done
 
+  # Interpolate BOSH manifest
   bosh interpolate ${arguments} cf-deployment/${MANIFEST_FILE} > /tmp/cf.yml
 
-  local stemcells_json=$(ruby -rjson -ryaml -e "puts YAML.load_file('/tmp/cf.yml').to_json" | jq .stemcells)
-  local size=$(echo ${stemcells_json} | jq 'length')
-  if [ ${size} -eq 0 ]; then
+  # Extract stemcells from the manifest
+  local stemcells_json
+  stemcells_json=$(ruby -rjson -ryaml -e "puts YAML.load_file('/tmp/cf.yml').to_json" | jq .stemcells)
+  local size
+  size=$(echo "${stemcells_json}" | jq 'length')
+
+  if [ "${size}" -eq 0 ]; then
     echo "Error: Did not find any stemcells to upload."
     exit 1
   fi
 
-  for i in `seq 0 $((size - 1))`
-  do
-    local os=$(echo ${stemcells_json} | jq -r .[$i].os)
-    local version=$(echo ${stemcells_json} | jq -r .[$i].version)
-    upload_stemcell ${os} ${version}
+  # Loop through each stemcell and upload
+  for i in $(seq 0 $((size - 1))); do
+    local os
+    local version
+    os=$(echo "${stemcells_json}" | jq -r .[$i].os)
+    version=$(echo "${stemcells_json}" | jq -r .[$i].version)
+
+    upload_stemcell "${os}" "${version}"
   done
 }
 
@@ -418,51 +427,48 @@ upload_stemcell() {
   set -euo pipefail
   local os="$1"
   local version="$2"
+  local stemcell_name infrastructure stemcell_file stemcell_url
 
-  local stemcell_name infrastructure stemcell_url
-
-  if [ "${USE_LOCAL_STEMCELL:-false}" == "true" ]; then
-    echo "➡️  Uploading local stemcell..."
-    bosh upload-stemcell "stemcells/${stemcell_file}"
-    return
-  fi
-
-  # detect infra
+  # Detect infrastructure
   if bosh env | grep -q warden; then
     infrastructure="warden"
     stemcell_name="bosh-warden"
   elif bosh env | grep -q vsphere; then
     infrastructure="vsphere"
-    stemcell_name="bosh-vsphere-esxi"
+    stemcell_name="bosh-vsphere"
   elif bosh env | grep -q aws; then
-    infrastructure="aws"
+    infrastructure="aws-xen-hvm"
     stemcell_name="bosh-aws-xen-hvm"
   else
-    echo "❌ Unknown infrastructure type"
+    echo "❌ Could not detect infrastructure from bosh env"
     exit 1
   fi
 
-  echo "➡️  Uploading stemcell for infrastructure: $infrastructure ($stemcell_name)"
+  echo "➡️  Uploading stemcell for infrastructure: ${infrastructure} (${stemcell_name})"
 
-  # fetch latest version from bosh.io
-  local latest_version
-  latest_version=$(curl -s "https://bosh.io/api/v1/stemcells/${stemcell_name}-${os}-go_agent" \
-    | jq -r '.[0].version')
+  case "${STEMCELL_SOURCE:-boshio}" in
+    # Offline / local stemcells
+    shepherd|local)
+      stemcell_file="stemcells/stemcell-${os}-${version}.tgz"
+      if [[ ! -f "${stemcell_file}" ]]; then
+        echo "❌ Missing stemcell file: ${stemcell_file}"
+        exit 1
+      fi
+      echo "➡️  Uploading stemcell from local: ${stemcell_file}"
+      bosh upload-stemcell "${stemcell_file}"
+      ;;
 
-  if [ -z "$latest_version" ] || [ "$latest_version" == "null" ]; then
-    echo "❌ Failed to fetch latest stemcell version for ${stemcell_name}-${os}"
-    exit 1
-  fi
+    # Optional: still allow bosh.io fetch if network available
+    boshio)
+      stemcell_url="https://bosh.io/d/stemcells/${stemcell_name}-${os}-go_agent?v=${version}"
+      echo "➡️  Downloading stemcell from bosh.io: ${stemcell_url}"
+      bosh upload-stemcell "${stemcell_url}"
+      ;;
 
-  echo "➡️  Latest available version: $latest_version (requested: $version)"
-
-  # decide which version to upload
-  if [ "$version" == "latest" ]; then
-    stemcell_url="https://bosh.io/d/stemcells/${stemcell_name}-${os}-go_agent?v=${latest_version}"
-  else
-    stemcell_url="https://bosh.io/d/stemcells/${stemcell_name}-${os}-go_agent?v=${version}"
-  fi
-
-  echo "➡️  Downloading and uploading stemcell: $stemcell_url"
-  bosh upload-stemcell "$stemcell_url"
+    *)
+      echo "❌ Unknown STEMCELL_SOURCE: ${STEMCELL_SOURCE}"
+      echo "   Use one of: boshio | shepherd"
+      exit 1
+      ;;
+  esac
 }
