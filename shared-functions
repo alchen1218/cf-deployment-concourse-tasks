@@ -416,55 +416,53 @@ upload_stemcells() {
 
 upload_stemcell() {
   set -euo pipefail
+  local os="$1"
+  local version="$2"
 
   local stemcell_name infrastructure stemcell_url
 
-  if [ "${BOSH_LITE:-}" == "true" ]; then
-    # For bosh-lite
-    infrastructure="bosh-lite"
-    stemcell_name="bosh-warden-boshlite"
-
-  elif bosh env 2>/dev/null | grep -q "warden"; then
-    # For warden CPI
-    infrastructure="warden"
-    stemcell_name="bosh-warden"
-
-  elif bosh env 2>/dev/null | grep -q "general"; then
-    # For generic CPI
-    infrastructure="general"
-    stemcell_name="bosh-generic"
-
-  elif [ -d toolsmiths-env ]; then
-    # For toolsmiths env (default to GCP)
-    infrastructure="gcp"
-    stemcell_name="bosh-google-kvm"
-
-  else
-    # Use iaas from bbl-state.json if present
-    infrastructure="$(jq -r .iaas bbl-state/${BBL_STATE_DIR}/bbl-state.json)"
-    case "${infrastructure}" in
-      gcp)       stemcell_name="bosh-google-kvm" ;;
-      aws)       stemcell_name="bosh-aws-xen-hvm" ;;
-      azure)     stemcell_name="bosh-azure-hyperv" ;;
-      vsphere)   stemcell_name="bosh-vsphere-esxi" ;;
-      openstack) stemcell_name="bosh-openstack-kvm" ;;
-      *)
-        echo "❌ Unknown infrastructure: ${infrastructure}" >&2
-        exit 1
-        ;;
-    esac
+  if [ "${USE_LOCAL_STEMCELL:-false}" == "true" ]; then
+    echo "➡️  Uploading local stemcell..."
+    bosh upload-stemcell "stemcells/${stemcell_file}"
+    return
   fi
 
-  echo "➡️  Uploading stemcell for infrastructure: ${infrastructure} (${stemcell_name})"
+  # detect infra
+  if bosh env | grep -q warden; then
+    infrastructure="warden"
+    stemcell_name="bosh-warden"
+  elif bosh env | grep -q vsphere; then
+    infrastructure="vsphere"
+    stemcell_name="bosh-vsphere-esxi"
+  elif bosh env | grep -q aws; then
+    infrastructure="aws"
+    stemcell_name="bosh-aws-xen-hvm"
+  else
+    echo "❌ Unknown infrastructure type"
+    exit 1
+  fi
 
-  # Grab latest stemcell version from bosh.io
+  echo "➡️  Uploading stemcell for infrastructure: $infrastructure ($stemcell_name)"
+
+  # fetch latest version from bosh.io
   local latest_version
-  latest_version="$(curl -s "https://bosh.io/api/v1/stemcells/${stemcell_name}-ubuntu-jammy-go_agent" \
-                    | jq -r .latest_release.version)"
+  latest_version=$(curl -s "https://bosh.io/api/v1/stemcells/${stemcell_name}-${os}-go_agent" \
+    | jq -r '.[0].version')
 
-  stemcell_url="https://bosh.io/d/stemcells/${stemcell_name}-ubuntu-jammy-go_agent?v=${latest_version}"
+  if [ -z "$latest_version" ] || [ "$latest_version" == "null" ]; then
+    echo "❌ Failed to fetch latest stemcell version for ${stemcell_name}-${os}"
+    exit 1
+  fi
 
-  echo "➡️  Uploading stemcell from: ${stemcell_url}"
-  bosh upload-stemcell "${stemcell_url}" \
-    --sha1 "$(curl -sL "${stemcell_url}.sha1" | awk '{print $1}')"
+  echo "➡️  Latest available version: $latest_version (requested: $version)"
+
+  # decide which version to upload
+  if [ "$version" == "latest" ]; then
+    stemcell_url="https://bosh.io/d/stemcells/${stemcell_name}-${os}-go_agent?v=${latest_version}"
+  else
+    stemcell_url="https://bosh.io/d/stemcells/${stemcell_name}-${os}-go_agent?v=${version}"
+  fi
+
+  echo "➡️  Downloading and uploading stemcell: $stemcell_url"
+  bosh upload-stemcell "$stemcell_url"
 }
