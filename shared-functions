@@ -429,8 +429,8 @@ upload_stemcell() {
   if [ "${BOSH_LITE}" == "true" ]; then
     infrastructure="bosh-lite"
     echo "BOSH_LITE mode detected → overriding stemcell to ubuntu-bionic..."
-    os="ubuntu-bionic"
-    version="621.85"   # or pull from cf.yml if you want it dynamic
+    os="ubuntu-xenial"
+    version="621.76"
     stemcell_name="bosh-warden-boshlite-${os}-go_agent"
   elif [ -d toolsmiths-env ]; then
     infrastructure="gcp"
