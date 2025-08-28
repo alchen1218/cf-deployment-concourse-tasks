@@ -285,12 +285,46 @@ function uptimer_bosh_deploy() {
 
 function bosh_deploy() {
   local deployment_name
+  echo "i am here, right before setting deployment name"
   deployment_name=$(bosh interpolate "${INTERPOLATED_MANIFEST}" --path /name)
+
+  echo "i am here, right after setting deployment name: ${deployment_name}"
+
+  # Debug step: Check vm_extensions in current cloud config
+  echo "=== DEBUG: Dumping vm_extensions from current cloud config ==="
+
+  bosh cloud-config > current-cloud-config.yml
+  grep -A5 "vm_extensions:" current-cloud-config.yml || echo "No vm_extensions found."
+  grep -A5 "diego-ssh-proxy-network-properties" current-cloud-config.yml || echo "diego-ssh-proxy-network-properties not found."
+
+  echo "============================================================="
+  echo "check current cloud configs"
+  bosh cloud-config > current-cloud-config.yml
+
+  echo "========================111111===================================="
+  # add diego-ssh-proxy-network-properties only if it doesn't exist
+  yq e -i '.vm_extensions += [{"name":"diego-ssh-proxy-network-properties","cloud_properties":{"ports":[{"host":2222}]}}]' current-cloud-config.yml
+  yq e -i '.vm_extensions += [{"name":"cf-router-network-properties","cloud_properties":{"ports":[{"host":2222}]}}]' current-cloud-config.yml
+
+  echo "=========================11111===================================="
+
+  echo "============ current-cloud-config.yml start ================="
+  cat current-cloud-config.yml
+  echo "============ current-cloud-config.yml done ================="
+  # upload the modified config to BOSH
+  bosh update-cloud-config current-cloud-config.yml --non-interactive
+  echo "============================================================="
 
   if ${DEPLOY_WITH_UPTIME_MEASUREMENTS}; then
     uptimer_bosh_deploy ${@}
   else
     pushd cf-deployment > /dev/null
+      echo "================check stemcells================"
+      bosh stemcells
+      echo "================check interpolated manifest================"
+      echo "${INTERPOLATED_MANIFEST}"
+      echo "================before bosh deploy command================"
+      
       bosh \
         -n \
         -d "${deployment_name}" \
@@ -428,7 +462,7 @@ upload_stemcell() {
   # Determine infrastructure and stemcell base name
   if [ "${BOSH_LITE}" == "true" ]; then
     infrastructure="bosh-lite"
-    echo "BOSH_LITE mode detected → overriding stemcell to ubuntu-bionic..."
+    echo "BOSH_LITE mode detected → overriding stemcell to ubuntu-xenial..."
     os="ubuntu-xenial"
     version="621.76"
     stemcell_name="bosh-warden-boshlite-${os}-go_agent"
