@@ -457,7 +457,10 @@ upload_stemcell() {
     fi
   fi
 
-  if [ "${os}" = "ubuntu-noble" ]; then
+  # Fix for BOSH_LITE: don’t append -go_agent
+  if [ "${BOSH_LITE}" == "true" ]; then
+    stemcell_name="${stemcell_name}-${os}"
+  elif [ "${os}" = "ubuntu-noble" ]; then
     stemcell_name="${stemcell_name}-${os}"
   else
     stemcell_name="${stemcell_name}-${os}-go_agent"
