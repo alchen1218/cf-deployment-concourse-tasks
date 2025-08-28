@@ -428,12 +428,10 @@ upload_stemcell() {
   # Determine infrastructure and stemcell base name
   if [ "${BOSH_LITE}" == "true" ]; then
     infrastructure="bosh-lite"
-    echo "BOSH_LITE detected, using stable stemcell for BOSH Lite"
-
-    # BOSH Lite does NOT support Jammy; map to Bionic
-    os="bionic"
-    version="621.85"  # known working BOSH Lite stemcell version
-    stemcell_name="bosh-warden-boshlite-${os}"
+    echo "BOSH_LITE mode detected → overriding stemcell to ubuntu-bionic..."
+    os="ubuntu-bionic"
+    version="621.85"   # or pull from cf.yml if you want it dynamic
+    stemcell_name="bosh-warden-boshlite-${os}-go_agent"
   elif [ -d toolsmiths-env ]; then
     infrastructure="gcp"
     stemcell_name="bosh-google-kvm"
