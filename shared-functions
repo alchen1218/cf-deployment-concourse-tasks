@@ -319,12 +319,12 @@ function bosh_deploy() {
     uptimer_bosh_deploy ${@}
   else
     pushd cf-deployment > /dev/null
-      echo "================check stemcells================"
+      echo "================check stemcells=================="
       bosh stemcells
       echo "================check interpolated manifest================"
       echo "${INTERPOLATED_MANIFEST}"
       echo "================before bosh deploy command================"
-      
+
       bosh \
         -n \
         -d "${deployment_name}" \
