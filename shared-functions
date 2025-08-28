@@ -415,55 +415,43 @@ upload_stemcells() {
 }
 
 upload_stemcell() {
-  # Read potentially variable stemcell paramaters out of cf-deployment with bosh
-  local os
-  os=$1
-  local version
-  version=$2
+  local os="$1"
+  local version="$2"
 
   echo "=== Starting upload_stemcell ==="
   echo "Requested OS: $os, Version: $version"
 
-  # Hardcode a couple of stable stemcell paramaters
-  local stemcells_url
-  stemcells_url="https://bosh.io/d/stemcells"
-
-  # Ask bosh if it already has our OS / version stemcell combination
-  # As of this writing, the new bosh cli doesn't have --skip-if-exists
-  set +e
-  local existing_stemcell
-  existing_stemcell=$(bosh stemcells | grep "${os}" | awk '{print $2}' | tr -d "\*" | grep ^"${version}"$ )
-  set -e
-
+  local stemcells_url="https://bosh.io/d/stemcells"
   local stemcell_name
-
   local infrastructure
-  if [ "${BOSH_LITE}" == "true"  ]; then
+
+  # Determine infrastructure and stemcell base name
+  if [ "${BOSH_LITE}" == "true" ]; then
     infrastructure="bosh-lite"
-    echo "BOSH_LITE detected, using stemcell bosh-warden-boshlite"
-    stemcell_name="bosh-warden-boshlite"
+    echo "BOSH_LITE detected, using stable stemcell for BOSH Lite"
+
+    # BOSH Lite does NOT support Jammy; map to Bionic
+    os="bionic"
+    version="621.85"  # known working BOSH Lite stemcell version
+    stemcell_name="bosh-warden-boshlite-${os}"
   elif [ -d toolsmiths-env ]; then
     infrastructure="gcp"
     stemcell_name="bosh-google-kvm"
   else
     infrastructure="$(jq -r .iaas bbl-state/${BBL_STATE_DIR}/bbl-state.json)"
-
-    if [ "$infrastructure" = "aws" ]; then
-      stemcell_name="bosh-aws-xen-hvm"
-    elif [ "$infrastructure" = "gcp" ]; then
-      stemcell_name="bosh-google-kvm"
-    elif [ "$infrastructure" = "vsphere" ]; then
-      stemcell_name="bosh-vsphere-esxi"
-    elif [ "$infrastructure" = "azure" ]; then
-      stemcell_name="bosh-azure-hyperv"
-    elif [ "$infrastructure" = "openstack" ]; then
-      stemcell_name="bosh-openstack-kvm"
-    fi
+    case "$infrastructure" in
+      aws) stemcell_name="bosh-aws-xen-hvm" ;;
+      gcp) stemcell_name="bosh-google-kvm" ;;
+      vsphere) stemcell_name="bosh-vsphere-esxi" ;;
+      azure) stemcell_name="bosh-azure-hyperv" ;;
+      openstack) stemcell_name="bosh-openstack-kvm" ;;
+      *) echo "Unknown infrastructure: $infrastructure"; exit 1 ;;
+    esac
   fi
 
-  # Append OS / go_agent only if not BOSH Lite
+  # Append OS/go_agent suffix only if not BOSH Lite
   if [ "${BOSH_LITE}" != "true" ]; then
-    if [ "${os}" = "ubuntu-noble" ]; then
+    if [ "$os" = "ubuntu-noble" ]; then
       stemcell_name="${stemcell_name}-${os}"
     else
       stemcell_name="${stemcell_name}-${os}-go_agent"
@@ -481,26 +469,29 @@ upload_stemcell() {
   echo "Stemcell name: $stemcell_name"
   echo "Full stemcell URL: $full_stemcell_url"
 
-  # If bosh already has our stemcell, exit 0
+  # Check if stemcell already exists
+  set +e
+  local existing_stemcell
+  existing_stemcell=$(bosh stemcells | grep "${os}" | awk '{print $2}' | tr -d "*" | grep "^${version}$")
+  set -e
+
   if [ "${existing_stemcell}" ]; then
-    echo "Task bosh-upload-stemcell-from-cf-deployment:"
-    echo "Stemcell '${stemcell_name}/${version}' already exists.  Skipping..."
+    echo "Stemcell '${stemcell_name}/${version}' already exists. Skipping upload..."
     return
   fi
 
+  # For non-BOSH-Lite, verify the stemcell exists on bosh.io
   if [ "${BOSH_LITE}" != "true" ]; then
     set +e
     wget -S --spider "${full_stemcell_url}" > /dev/null 2>&1
     local stemcell_exists=$?
     set -e
     if [ $stemcell_exists -ne 0 ]; then
-      echo "Error: Could not find a '$os' stemcell for IaaS '$infrastructure' on bosh.io."
+      echo "Error: Could not find stemcell '${stemcell_name}' version '${version}' for IaaS '${infrastructure}' on bosh.io."
       exit 2
     fi
   fi
-  # ... otherwise, begin the upload process
-  bosh \
-    -n \
-    upload-stemcell \
-    "${full_stemcell_url}"
+
+  # Upload the stemcell
+  bosh -n upload-stemcell "${full_stemcell_url}"
 }
