@@ -421,6 +421,9 @@ upload_stemcell() {
   local version
   version=$2
 
+  echo "=== Starting upload_stemcell ==="
+  echo "Requested OS: $os, Version: $version"
+
   # Hardcode a couple of stable stemcell paramaters
   local stemcells_url
   stemcells_url="https://bosh.io/d/stemcells"
@@ -437,6 +440,7 @@ upload_stemcell() {
   local infrastructure
   if [ "${BOSH_LITE}" == "true"  ]; then
     infrastructure="bosh-lite"
+    echo "BOSH_LITE detected, using stemcell bosh-warden-boshlite"
     stemcell_name="bosh-warden-boshlite"
   elif [ -d toolsmiths-env ]; then
     infrastructure="gcp"
@@ -457,20 +461,25 @@ upload_stemcell() {
     fi
   fi
 
-  # Fix for BOSH_LITE: don’t append -go_agent
-  if [ "${BOSH_LITE}" == "true" ]; then
-    stemcell_name="${stemcell_name}-${os}"
-  elif [ "${os}" = "ubuntu-noble" ]; then
-    stemcell_name="${stemcell_name}-${os}"
-  else
-    stemcell_name="${stemcell_name}-${os}-go_agent"
+  # Append OS / go_agent only if not BOSH Lite
+  if [ "${BOSH_LITE}" != "true" ]; then
+    if [ "${os}" = "ubuntu-noble" ]; then
+      stemcell_name="${stemcell_name}-${os}"
+    else
+      stemcell_name="${stemcell_name}-${os}-go_agent"
+    fi
   fi
 
+  local full_stemcell_url
   if [ "$version" = "latest" ]; then
     full_stemcell_url="${stemcells_url}/${stemcell_name}"
   else
     full_stemcell_url="${stemcells_url}/${stemcell_name}?v=${version}"
   fi
+
+  echo "Infrastructure: $infrastructure"
+  echo "Stemcell name: $stemcell_name"
+  echo "Full stemcell URL: $full_stemcell_url"
 
   # If bosh already has our stemcell, exit 0
   if [ "${existing_stemcell}" ]; then
@@ -479,17 +488,16 @@ upload_stemcell() {
     return
   fi
 
-  # If bosh.io doesn't have our stemcell, exit 2
-  set +e
-  local stemcell_exists
-  wget -S --spider "${full_stemcell_url}" > /dev/null 2>&1
-  stemcell_exists=$?
-  if [ ${stemcell_exists} -ne 0 ]; then
-    echo "Error: Could not find a '$os' stemcell for IaaS '$infrastructure' on bosh.io. Please double-check that the IaaS/OS combination is supported."
-    exit 2 #POSIX 'No such file or directory'
+  if [ "${BOSH_LITE}" != "true" ]; then
+    set +e
+    wget -S --spider "${full_stemcell_url}" > /dev/null 2>&1
+    local stemcell_exists=$?
+    set -e
+    if [ $stemcell_exists -ne 0 ]; then
+      echo "Error: Could not find a '$os' stemcell for IaaS '$infrastructure' on bosh.io."
+      exit 2
+    fi
   fi
-  set -e
-
   # ... otherwise, begin the upload process
   bosh \
     -n \
