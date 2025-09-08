@@ -162,8 +162,8 @@ EOF
     echo "📄 Found $FILE"
     if grep -q "/releases/?name=tanzu-otel-collector" "$FILE"; then
       echo "🔧 Updating path..."
-      # Replace any '/releases/?name=tanzu-otel-collector' with '/releases'
-      sed -i.bak 's|/releases/?name=tanzu-otel-collector|/releases|' "$FILE"
+      # Replace any '/releases/name=tanzu-otel-collector' with '/releases'
+      sed -i.bak 's|/releases/name=tanzu-otel-collector|/releases|' "$FILE"
       echo "✅ Updated $FILE (backup saved as $FILE.bak)"
     else
       echo "ℹ️ No update needed — file already has '/releases'."
