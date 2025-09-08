@@ -160,7 +160,7 @@ EOF
 
   if [[ -f "$FILE" ]]; then
     echo "📄 Found $FILE"
-    if grep -q "/releases/?name=tanzu-otel-collector" "$FILE"; then
+    if grep -q "/releases/name=tanzu-otel-collector" "$FILE"; then
       echo "🔧 Updating path..."
       # Replace any '/releases/name=tanzu-otel-collector' with '/releases'
       sed -i.bak 's|/releases/name=tanzu-otel-collector|/releases|' "$FILE"
