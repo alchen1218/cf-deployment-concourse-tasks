@@ -156,6 +156,21 @@ EOF
 
     arguments="${arguments} -o create-provided-release.yml"
   fi
+  FILE="create-provided-release.yml"
+
+  if [[ -f "$FILE" ]]; then
+    echo "📄 Found $FILE"
+    if grep -q "/releases/?name=tanzu-otel-collector" "$FILE"; then
+      echo "🔧 Updating path..."
+      # Replace any '/releases/?name=tanzu-otel-collector' with '/releases'
+      sed -i.bak 's|/releases/?name=tanzu-otel-collector|/releases|' "$FILE"
+      echo "✅ Updated $FILE (backup saved as $FILE.bak)"
+    else
+      echo "ℹ️ No update needed — file already has '/releases'."
+    fi
+  else
+    echo "❌ $FILE not found in current directory."
+  fi
 
   INTERPOLATED_MANIFEST=$(mktemp)
   export INTERPOLATED_MANIFEST
