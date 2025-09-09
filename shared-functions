@@ -186,6 +186,42 @@ EOF
     ${bosh_arguments} \
     "${bosh_manifest}" \
     > "${INTERPOLATED_MANIFEST}"
+
+  # Make sure INTERPOLATED_MANIFEST is set
+  if [ -z "$INTERPOLATED_MANIFEST" ]; then
+    echo "❌ INTERPOLATED_MANIFEST is not set"
+    exit 1
+  fi
+  
+  # Backup the temp file just in case
+  cp "$INTERPOLATED_MANIFEST" "${INTERPOLATED_MANIFEST}.bak"
+  
+  # Check the type of .releases
+  IS_LIST=$(yq eval '.releases | type' "$INTERPOLATED_MANIFEST")
+  
+  if [ "$IS_LIST" = "!!map" ]; then
+    # It's a map, wrap it in a list
+    yq eval '.releases |= [.]' -i "$INTERPOLATED_MANIFEST"
+    echo "✅ Releases section was a map and has been converted to a list."
+  else
+    echo "✅ Releases section is already a list. No changes made."
+  fi
+
+  if [ -d "config" ] && [ -n "$JSON_KEY" ]; then
+    cat << EOF > config/private.yml
+  ---
+  blobstore:
+    options:
+      credentials_source: static
+      bucket_name: tanzu-otel-collector-release-blobs
+      json_key: |
+  $(echo "$JSON_KEY" | sed 's/^/      /')
+  EOF
+    echo "✅ config/private.yml created."
+  else
+    echo "⚠️ Skipping private.yml creation. Either 'config/' does not exist or \$JSON_KEY is not set."
+  fi
+  
 }
 
 write_uptimer_deploy_config() {
