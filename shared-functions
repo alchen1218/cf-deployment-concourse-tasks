@@ -209,14 +209,14 @@ EOF
 
   if [ -d "config" ] && [ -n "$JSON_KEY" ]; then
     cat << EOF > config/private.yml
-  ---
-  blobstore:
-    options:
-      credentials_source: static
-      bucket_name: tanzu-otel-collector-release-blobs
-      json_key: |
-  $(echo "$JSON_KEY" | sed 's/^/      /')
-  EOF
+---
+blobstore:
+  options:
+    credentials_source: static
+    bucket_name: tanzu-otel-collector-release-blobs
+    json_key: |
+       $(echo "$JSON_KEY" | sed 's/^/      /')
+EOF
     echo "✅ config/private.yml created."
   else
     echo "⚠️ Skipping private.yml creation. Either 'config/' does not exist or \$JSON_KEY is not set."
