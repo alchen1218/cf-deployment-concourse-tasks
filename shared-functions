@@ -207,6 +207,41 @@ EOF
     echo "✅ Releases section is already a list. No changes made."
   fi
 
+  # Step 1: Extract all releases referenced in jobs
+  JOB_RELEASES=$(yq e '.instance_groups[].jobs[].release' "$INTERPOLATED_MANIFEST" | sort -u)
+  echo "DEBUG: Releases referenced by jobs:"
+  echo "$JOB_RELEASES"
+  echo "----------------------------------"
+
+
+  # Step 2: Extract releases already declared in 'releases:'
+  DECLARED_RELEASES=$(yq e '.releases[].name' "$INTERPOLATED_MANIFEST" | sort -u)
+  echo "DEBUG: Releases already declared:"
+  echo "$DECLARED_RELEASES"
+  echo "----------------------------------"
+
+  # Step 3: Determine missing releases
+  MISSING_RELEASES=$(comm -23 <(echo "$JOB_RELEASES") <(echo "$DECLARED_RELEASES"))
+  echo "DEBUG: Missing releases to be added:"
+  echo "$MISSING_RELEASES"
+  echo "----------------------------------"
+
+  # Step 4: Append missing releases to the releases block
+  for rel in $MISSING_RELEASES; do
+      echo "Adding missing release: $rel"
+      # Special case: tanzu-otel-collector keeps version "create" if present
+      if [[ "$rel" == "tanzu-otel-collector" ]]; then
+          yq -i ".releases += [{\"name\":\"$rel\",\"version\":\"create\"}]" "$INTERPOLATED_MANIFEST"
+      else
+          yq -i ".releases += [{\"name\":\"$rel\",\"version\":\"latest\"}]" "$INTERPOLATED_MANIFEST"
+      fi
+  done
+
+  # Optional: keep releases unique by name
+  yq -i '.releases |= unique_by(.name)' "$DEPLOY_FILE"
+
+  echo "✅ Updated $DEPLOY_FILE with all missing releases."
+
   if [ -d "release/config" ] && [ -n "$JSON_KEY" ]; then
     cat << EOF > release/config/private.yml
 ---
