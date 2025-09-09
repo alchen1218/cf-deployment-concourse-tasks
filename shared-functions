@@ -238,9 +238,9 @@ EOF
   done
 
   # Optional: keep releases unique by name
-  yq -i '.releases |= unique_by(.name)' "$DEPLOY_FILE"
+  yq -i '.releases |= unique_by(.name)' "$INTERPOLATED_MANIFEST"
 
-  echo "✅ Updated $DEPLOY_FILE with all missing releases."
+  echo "✅ Updated $INTERPOLATED_MANIFEST with all missing releases."
 
   if [ -d "release/config" ] && [ -n "$JSON_KEY" ]; then
     cat << EOF > release/config/private.yml
