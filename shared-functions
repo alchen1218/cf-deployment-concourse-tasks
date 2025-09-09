@@ -215,7 +215,7 @@ blobstore:
     credentials_source: static
     bucket_name: tanzu-otel-collector-release-blobs
     json_key: |
-       $(echo "$JSON_KEY" | sed 's/^/      /')
+$(echo "$JSON_KEY" | sed 's/^/      /')
 EOF
     echo "✅ release/config/private.yml created."
   else
