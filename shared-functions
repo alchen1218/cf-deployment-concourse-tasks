@@ -136,7 +136,7 @@ function bosh_interpolate() {
       cat << EOF > create-provided-release.yml
 ---
 - type: replace
-  path: /releases/name=${release_name}
+  path: /releases/name=${release_name}?
   value:
     name: ${release_name}
     url: file://${tarball_path}
@@ -156,21 +156,21 @@ EOF
 
     arguments="${arguments} -o create-provided-release.yml"
   fi
-  FILE="create-provided-release.yml"
+  # FILE="create-provided-release.yml"
 
-  if [[ -f "$FILE" ]]; then
-    echo "📄 Found $FILE"
-    if grep -q "/releases/name=tanzu-otel-collector" "$FILE"; then
-      echo "🔧 Updating path..."
+  # if [[ -f "$FILE" ]]; then
+    # echo "📄 Found $FILE"
+     # if grep -q "/releases/name=tanzu-otel-collector" "$FILE"; then
+       # echo "🔧 Updating path..."
       # Replace any '/releases/name=tanzu-otel-collector' with '/releases'
-      sed -i.bak 's|/releases/name=tanzu-otel-collector|/releases|' "$FILE"
-      echo "✅ Updated $FILE (backup saved as $FILE.bak)"
-    else
-      echo "ℹ️ No update needed — file already has '/releases'."
-    fi
-  else
-    echo "❌ $FILE not found in current directory."
-  fi
+       # sed -i.bak 's|/releases/name=tanzu-otel-collector|/releases|' "$FILE"
+       # echo "✅ Updated $FILE (backup saved as $FILE.bak)"
+     # else
+       # echo "ℹ️ No update needed — file already has '/releases'."
+     # fi
+   # else
+     # echo "❌ $FILE not found in current directory."
+   # fi
 
   INTERPOLATED_MANIFEST=$(mktemp)
   export INTERPOLATED_MANIFEST
@@ -187,60 +187,60 @@ EOF
     "${bosh_manifest}" \
     > "${INTERPOLATED_MANIFEST}"
 
-  # Make sure INTERPOLATED_MANIFEST is set
-  if [ -z "$INTERPOLATED_MANIFEST" ]; then
-    echo "❌ INTERPOLATED_MANIFEST is not set"
-    exit 1
-  fi
-  
-  # Backup the temp file just in case
-  cp "$INTERPOLATED_MANIFEST" "${INTERPOLATED_MANIFEST}.bak"
-  
-  # Check the type of .releases
-  IS_LIST=$(yq eval '.releases | type' "$INTERPOLATED_MANIFEST")
-  
-  if [ "$IS_LIST" = "!!map" ]; then
-    # It's a map, wrap it in a list
-    yq eval '.releases |= [.]' -i "$INTERPOLATED_MANIFEST"
-    echo "✅ Releases section was a map and has been converted to a list."
-  else
-    echo "✅ Releases section is already a list. No changes made."
-  fi
+  # # Make sure INTERPOLATED_MANIFEST is set
+  # if [ -z "$INTERPOLATED_MANIFEST" ]; then
+  #   echo "❌ INTERPOLATED_MANIFEST is not set"
+  #   exit 1
+  # fi
+  # 
+  # # Backup the temp file just in case
+  # cp "$INTERPOLATED_MANIFEST" "${INTERPOLATED_MANIFEST}.bak"
+  # 
+  # # Check the type of .releases
+  # IS_LIST=$(yq eval '.releases | type' "$INTERPOLATED_MANIFEST")
+  # 
+  # if [ "$IS_LIST" = "!!map" ]; then
+  #   # It's a map, wrap it in a list
+  #   yq eval '.releases |= [.]' -i "$INTERPOLATED_MANIFEST"
+  #   echo "✅ Releases section was a map and has been converted to a list."
+  # else
+  #   echo "✅ Releases section is already a list. No changes made."
+  # fi
+  # 
+  # # Step 1: Extract all releases referenced in jobs
+  # JOB_RELEASES=$(yq e '.instance_groups[].jobs[].release' "$INTERPOLATED_MANIFEST" | sort -u)
+  # echo "DEBUG: Releases referenced by jobs:"
+  # echo "$JOB_RELEASES"
+  # echo "----------------------------------"
+  # 
+  # # Step 2: Extract releases already declared in 'releases:'
+  # DECLARED_RELEASES=$(yq e '.releases[].name' "$INTERPOLATED_MANIFEST" | sort -u)
+  # echo "DEBUG: Releases already declared:"
+  # echo "$DECLARED_RELEASES"
+  # echo "----------------------------------"
+  # 
+  # # Step 3: Determine missing releases
+  # MISSING_RELEASES=$(comm -23 <(echo "$JOB_RELEASES") <(echo "$DECLARED_RELEASES"))
+  # echo "DEBUG: Missing releases to be added:"
+  # echo "$MISSING_RELEASES"
+  # echo "----------------------------------"
+  # 
+  # # Step 4: Append missing releases to the releases block
+  # for rel in $MISSING_RELEASES; do
+  #     echo "Adding missing release: $rel"
+  #     # Special case: tanzu-otel-collector keeps version "create" if present
+  #     if [[ "$rel" == "tanzu-otel-collector" ]]; then
+  #         yq -i ".releases += [{\"name\":\"$rel\",\"version\":\"create\"}]" "$INTERPOLATED_MANIFEST"
+  #     else
+  #         yq -i ".releases += [{\"name\":\"$rel\",\"version\":\"latest\"}]" "$INTERPOLATED_MANIFEST"
+  #     fi
+  # done
+  # 
+  # # Optional: keep releases unique by name
+  # yq -i '.releases |= unique_by(.name)' "$INTERPOLATED_MANIFEST"
+  # 
+  # echo "✅ Updated $INTERPOLATED_MANIFEST with all missing releases."
 
-  # Step 1: Extract all releases referenced in jobs
-  JOB_RELEASES=$(yq e '.instance_groups[].jobs[].release' "$INTERPOLATED_MANIFEST" | sort -u)
-  echo "DEBUG: Releases referenced by jobs:"
-  echo "$JOB_RELEASES"
-  echo "----------------------------------"
-
-
-  # Step 2: Extract releases already declared in 'releases:'
-  DECLARED_RELEASES=$(yq e '.releases[].name' "$INTERPOLATED_MANIFEST" | sort -u)
-  echo "DEBUG: Releases already declared:"
-  echo "$DECLARED_RELEASES"
-  echo "----------------------------------"
-
-  # Step 3: Determine missing releases
-  MISSING_RELEASES=$(comm -23 <(echo "$JOB_RELEASES") <(echo "$DECLARED_RELEASES"))
-  echo "DEBUG: Missing releases to be added:"
-  echo "$MISSING_RELEASES"
-  echo "----------------------------------"
-
-  # Step 4: Append missing releases to the releases block
-  for rel in $MISSING_RELEASES; do
-      echo "Adding missing release: $rel"
-      # Special case: tanzu-otel-collector keeps version "create" if present
-      if [[ "$rel" == "tanzu-otel-collector" ]]; then
-          yq -i ".releases += [{\"name\":\"$rel\",\"version\":\"create\"}]" "$INTERPOLATED_MANIFEST"
-      else
-          yq -i ".releases += [{\"name\":\"$rel\",\"version\":\"latest\"}]" "$INTERPOLATED_MANIFEST"
-      fi
-  done
-
-  # Optional: keep releases unique by name
-  yq -i '.releases |= unique_by(.name)' "$INTERPOLATED_MANIFEST"
-
-  echo "✅ Updated $INTERPOLATED_MANIFEST with all missing releases."
 
   if [ -d "release/config" ] && [ -n "$JSON_KEY" ]; then
     cat << EOF > release/config/private.yml
