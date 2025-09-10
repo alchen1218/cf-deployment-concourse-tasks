@@ -242,7 +242,7 @@ EOF
   # echo "✅ Updated $INTERPOLATED_MANIFEST with all missing releases."
 
 
-  if [ -d "release/config" ] && [ -n "$JSON_KEY" ]; then
+  if [ -d "release/config" ] && [ -n "${JSON_KEY}" ]; then
     cat << EOF > release/config/private.yml
 ---
 blobstore:
@@ -250,11 +250,11 @@ blobstore:
     credentials_source: static
     bucket_name: tanzu-otel-collector-release-blobs
     json_key: |
-$(echo "$JSON_KEY" | sed 's/^/      /')
+$(echo "${JSON_KEY}" | sed 's/^/      /')
 EOF
     echo "✅ release/config/private.yml created."
   else
-    echo "⚠️ Skipping private.yml creation. Either 'release/config/' does not exist or \$JSON_KEY is not set."
+    echo "⚠️ Skipping private.yml creation. Either 'release/config/' does not exist or \${JSON_KEY} is not set."
   fi
   
 }
