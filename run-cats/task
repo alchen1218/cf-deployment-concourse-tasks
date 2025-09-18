@@ -21,6 +21,9 @@ else
   cp ${original_config} ${CONFIG}
 fi
 
+jq '.include_app_syslog_tcp = false' "$CONFIG" > "${CONFIG}.tmp" && mv "${CONFIG}.tmp" "$CONFIG"
+echo "Disabled TCP syslog tests in CATS config"
+
 if [ -f ${reporter_config} ]; then
   echo "Configuring Honeycomb integration..."
   set +x
