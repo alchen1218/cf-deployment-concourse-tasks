@@ -190,6 +190,7 @@ EOF
     interpolate ${arguments} \
     ${bosh_arguments} \
     "${bosh_manifest}" \
+    --ca-cert $BOSH_CA_CERT \
     > "${INTERPOLATED_MANIFEST}"
 
   # # Make sure INTERPOLATED_MANIFEST is set
