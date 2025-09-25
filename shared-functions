@@ -183,14 +183,14 @@ EOF
   local bosh_arguments
   bosh_arguments=""
 
-  export BOSH_CA_CERT="$(jq -r '.bosh.bosh_ca_cert' toolsmiths-env/metadata)"
+  get_bosh_ca
 
   bosh \
     -n \
     interpolate ${arguments} \
     ${bosh_arguments} \
     "${bosh_manifest}" \
-    --ca-cert $BOSH_CA_CERT \
+    --ca-cert /tmp/ca.crt \
     > "${INTERPOLATED_MANIFEST}"
 
   # # Make sure INTERPOLATED_MANIFEST is set
@@ -538,7 +538,7 @@ upload_stemcells() {
     arguments="${arguments} -o ops-files/${op}"
   done
 
-  bosh interpolate ${arguments} cf-deployment/${MANIFEST_FILE} > /tmp/cf.yml
+  bosh interpolate ${arguments} cf-deployment/${MANIFEST_FILE} --ca-cert /tmp/ca.crt > /tmp/cf.yml
 
   local stemcells_json=$(ruby -rjson -ryaml -e "puts YAML.load_file('/tmp/cf.yml').to_json" | jq .stemcells)
   local size=$(echo ${stemcells_json} | jq 'length')
@@ -634,3 +634,36 @@ upload_stemcell() {
   # Upload the stemcell
   bosh -n upload-stemcell "${full_stemcell_url}"
 }
+
+get_bosh_ca() {
+  set -euo pipefail
+
+  local user="ubuntu"               
+  local remote_cert_path="/var/tempest/workspaces/default/root_ca_certificate"
+  local metadata="toolsmiths-env/metadata"  
+
+  if [[ ! -f "$metadata" ]]; then
+    echo "Metadata file not found: $metadata"
+    return 1
+  fi
+
+  # Extract values
+  local ip
+  ip=$(jq -r '.ops_manager_public_ip' "$metadata")
+
+  local private_key
+  private_key=$(jq -r '.ops_manager_private_key' "$metadata")
+
+  # Temp private key file
+  local key_file
+  key_file=$(mktemp)
+  chmod 600 "$key_file"
+  echo "$private_key" > "$key_file"
+
+  # Fetch CA cert
+  scp -i "$key_file" -o StrictHostKeyChecking=no \
+    "$user@$ip:$remote_cert_path" /tmp/ca.crt
+
+  echo "✔ BOSH_CA_CERT downloaded from $ip"
+}
+
