@@ -652,7 +652,10 @@ upload_stemcell() {
   fi
 
   # Upload the stemcell
-  bosh -n upload-stemcell "${full_stemcell_url}"
+  if [ -n "$BOSH_IP" ]; then
+    bosh -n upload-stemcell "${full_stemcell_url}" --ca-cert=/tmp/ca.crt
+  else
+    bosh -n upload-stemcell "${full_stemcell_url}"
 }
 
 get_bosh_ca() {
