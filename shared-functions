@@ -686,7 +686,7 @@ get_bosh_ca() {
   # Fetch CA cert
   scp -i "$key_file" -o StrictHostKeyChecking=no \
     "$user@$ip:$remote_cert_path" /tmp/ca.crt
-  export BOSH_CA_CERT = /tmp/ca.crt
+  export BOSH_CA_CERT=/tmp/ca.crt
   echo "✔ BOSH_CA_CERT downloaded from $ip"
 }
 
