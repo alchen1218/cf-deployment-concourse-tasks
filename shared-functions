@@ -656,6 +656,7 @@ upload_stemcell() {
     bosh -n upload-stemcell "${full_stemcell_url}" --ca-cert=/tmp/ca.crt
   else
     bosh -n upload-stemcell "${full_stemcell_url}"
+  fi
 }
 
 get_bosh_ca() {
