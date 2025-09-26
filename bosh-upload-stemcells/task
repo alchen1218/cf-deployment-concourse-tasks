@@ -101,8 +101,7 @@ upload_stemcell() {
   bosh \
     -n \
     upload-stemcell \
-    "${full_stemcell_url}" \
-    --ca-cert /tmp/ca.crt
+    "${full_stemcell_url}"
 }
 
 function upload_stemcells() {
