@@ -180,31 +180,12 @@ EOF
   # shellcheck disable=SC2086
   local bosh_arguments
   bosh_arguments=""
-
-  metadata="toolsmiths-env/metadata"
-  ip=$(jq -r '.ops_manager_public_ip // empty' "$metadata")  # returns empty if null
-  
-  if [ -n "$ip" ]; then
-      echo "Ops Manager IP is $ip"
-      get_bosh_ca
-      bosh \
-        -n \
-        interpolate ${arguments} \
-        ${bosh_arguments} \
-        "${bosh_manifest}" \
-        --ca-cert /tmp/ca.crt \
-        > "${INTERPOLATED_MANIFEST}"
-  else
-      echo "Ops Manager IP is not set"
-      bosh \
-        -n \
-        interpolate ${arguments} \
-        ${bosh_arguments} \
-        "${bosh_manifest}" \
-        > "${INTERPOLATED_MANIFEST}"
-  fi
-
-  
+  bosh \
+    -n \
+    interpolate ${arguments} \
+    ${bosh_arguments} \
+    "${bosh_manifest}" \
+    > "${INTERPOLATED_MANIFEST}"
 
   # # Make sure INTERPOLATED_MANIFEST is set
   # if [ -z "$INTERPOLATED_MANIFEST" ]; then
