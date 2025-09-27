@@ -85,8 +85,6 @@ function set_git_config() {
 function setup_bosh_env_vars() {
   set +x
   
-  export BOSH_IP="$(jq -r '.ops_manager_public_ip' toolsmiths-env/metadata)"
-
   if [ -d toolsmiths-env ]; then
     eval "$(bbl print-env --metadata-file toolsmiths-env/metadata)"
     export SYSTEM_DOMAIN="$(cat toolsmiths-env/metadata | jq -r '.cf.api_url | sub("api."; "")')"
@@ -552,13 +550,7 @@ upload_stemcells() {
   do
     arguments="${arguments} -o ops-files/${op}"
   done
-  if [ -n "$BOSH_IP" ]; then
-    bosh interpolate ${arguments} cf-deployment/${MANIFEST_FILE} --ca-cert /tmp/ca.crt > /tmp/cf.yml
-  else
-    bosh interpolate ${arguments} cf-deployment/${MANIFEST_FILE} > /tmp/cf.yml
-  fi
-
-  
+  bosh interpolate ${arguments} cf-deployment/${MANIFEST_FILE} > /tmp/cf.yml
 
   local stemcells_json=$(ruby -rjson -ryaml -e "puts YAML.load_file('/tmp/cf.yml').to_json" | jq .stemcells)
   local size=$(echo ${stemcells_json} | jq 'length')
@@ -652,11 +644,8 @@ upload_stemcell() {
   fi
 
   # Upload the stemcell
-  if [ -n "$BOSH_IP" ]; then
-    bosh -n upload-stemcell "${full_stemcell_url}" --ca-cert=/tmp/ca.crt
-  else
-    bosh -n upload-stemcell "${full_stemcell_url}"
-  fi
+  bosh -n upload-stemcell "${full_stemcell_url}"
+   
 }
 
 get_bosh_ca() {
