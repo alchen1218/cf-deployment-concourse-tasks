@@ -86,7 +86,12 @@ function setup_bosh_env_vars() {
   set +x
   
   if [ -d toolsmiths-env ]; then
-    eval "$(bbl print-env --metadata-file toolsmiths-env/metadata)"
+    if [ -f toolsmiths-env/final-env.sh ]; then
+       source toolsmiths-env/final-env.sh
+       get_bosh_ca
+    else        
+       eval "$(bbl print-env --metadata-file toolsmiths-env/metadata)"
+    fi
     export SYSTEM_DOMAIN="$(cat toolsmiths-env/metadata | jq -r '.cf.api_url | sub("api."; "")')"
     export TCP_DOMAIN="tcp.${SYSTEM_DOMAIN}"
   else
@@ -391,30 +396,34 @@ function bosh_deploy() {
 
   echo "i am here, right after setting deployment name: ${deployment_name}"
 
-  # Debug step: Check vm_extensions in current cloud config
-  echo "=== DEBUG: Dumping vm_extensions from current cloud config ==="
+  if jq -e '.template != "epc-tas-template"' toolsmiths-env/lease.json >/dev/null 2>&1; then
 
-  bosh cloud-config > current-cloud-config.yml
-  grep -A5 "vm_extensions:" current-cloud-config.yml || echo "No vm_extensions found."
-  grep -A5 "diego-ssh-proxy-network-properties" current-cloud-config.yml || echo "diego-ssh-proxy-network-properties not found."
+    # Debug step: Check vm_extensions in current cloud config
+    echo "=== DEBUG: Dumping vm_extensions from current cloud config ==="
 
-  echo "============================================================="
-  echo "check current cloud configs"
-  bosh cloud-config > current-cloud-config.yml
+    bosh cloud-config > current-cloud-config.yml
+    grep -A5 "vm_extensions:" current-cloud-config.yml || echo "No vm_extensions found."
+    grep -A5 "diego-ssh-proxy-network-properties" current-cloud-config.yml || echo "diego-ssh-proxy-network-properties not found."
 
-  echo "========================111111===================================="
-  # add diego-ssh-proxy-network-properties only if it doesn't exist
-  yq e -i '.vm_extensions += [{"name":"diego-ssh-proxy-network-properties","cloud_properties":{"ports":[{"host":2222}]}}]' current-cloud-config.yml
-  yq e -i '.vm_extensions += [{"name":"cf-router-network-properties","cloud_properties":{"ports":[{"host":2222}]}}]' current-cloud-config.yml
+    echo "============================================================="
+    echo "check current cloud configs"
+    bosh cloud-config > current-cloud-config.yml
 
-  echo "=========================11111===================================="
+    echo "========================111111===================================="
+    # add diego-ssh-proxy-network-properties only if it doesn't exist
+    yq e -i '.vm_extensions += [{"name":"diego-ssh-proxy-network-properties","cloud_properties":{"ports":[{"host":2222}]}}]' current-cloud-config.yml
+    yq e -i '.vm_extensions += [{"name":"cf-router-network-properties","cloud_properties":{"ports":[{"host":2222}]}}]' current-cloud-config.yml
 
-  echo "============ current-cloud-config.yml start ================="
-  cat current-cloud-config.yml
-  echo "============ current-cloud-config.yml done ================="
-  # upload the modified config to BOSH
-  bosh update-cloud-config current-cloud-config.yml --non-interactive
-  echo "============================================================="
+    echo "=========================11111===================================="
+
+    echo "============ current-cloud-config.yml start ================="
+    cat current-cloud-config.yml
+    echo "============ current-cloud-config.yml done ================="
+    # upload the modified config to BOSH
+    bosh update-cloud-config current-cloud-config.yml --non-interactive
+    echo "============================================================="
+    
+  fi
 
   if ${DEPLOY_WITH_UPTIME_MEASUREMENTS}; then
     uptimer_bosh_deploy ${@}
@@ -648,16 +657,28 @@ get_bosh_ca() {
   local private_key
   private_key=$(jq -r '.ops_manager_private_key' "$metadata")
 
-  # Temp private key file
+  keyfile="$(basename "${BOSH_ALL_PROXY#*private-key=}")"
+  keyfile="/tmp/$keyfile"
+  echo "pkey file from proxy : $keyfile"   # Temp private key file
   local key_file
   key_file=$(mktemp)
   chmod 600 "$key_file"
   echo "$private_key" > "$key_file"
+  cat $key_file
+  ls $key_file
+  
+  cp $key_file $keyfile 
+ 
+  echo "keyfile - $keyfile"
+  echo "key_file - $key_file"
+
+  diff $keyfile $key_file
 
   # Fetch CA cert
   scp -i "$key_file" -o StrictHostKeyChecking=no \
     "$user@$ip:$remote_cert_path" /tmp/ca.crt
-  export BOSH_CA_CERT=/tmp/ca.crt
+  cp /tmp/ca.crt $BOSH_CA_CERT 
+  cat $BOSH_CA_CERT 
   echo "✔ BOSH_CA_CERT downloaded from $ip"
 }
 
