@@ -422,7 +422,11 @@ function bosh_deploy() {
     # upload the modified config to BOSH
     bosh update-cloud-config current-cloud-config.yml --non-interactive
     echo "============================================================="
-    
+  else
+    bosh cloud-config > cloud-config.yml
+    echo "Adding new vm_type 'minimal'..."
+    yq eval '.vm_types += [{"name": "minimal", "cloud_properties": {}}]' -i cloud-config.yml
+    bosh update-cloud-config cloud-config.yml --non-interactive
   fi
 
   if ${DEPLOY_WITH_UPTIME_MEASUREMENTS}; then
