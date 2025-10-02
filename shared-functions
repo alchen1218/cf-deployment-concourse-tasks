@@ -424,8 +424,48 @@ function bosh_deploy() {
     echo "============================================================="
   else
     bosh cloud-config > cloud-config.yml
-    echo "Adding new vm_type 'minimal'..."
+
+    # 1. Change azs name from "null" to "z1"
+    echo "1. Updating AZ name from 'null' to 'z1'..."
+    yq eval '.azs[0].name = "z1"' -i cloud-config.yml
+    
+    # 2. Change compilation az reference from "null" to "z1"
+    echo "2. Updating compilation AZ reference..."
+    yq eval '.compilation.az = "z1"' -i cloud-config.yml
+    
+    # 3. Change compilation network from "network" to "default"
+    echo "3. Updating compilation network reference..."
+    yq eval '.compilation.network = "default"' -i cloud-config.yml
+    
+    # 4. Change network name from "network" to "default"
+    echo "4. Updating network name from 'network' to 'default'..."
+    yq eval '.networks[0].name = "default"' -i cloud-config.yml
+    
+    # 5. Update network subnet azs reference from "null" to "z1"
+    echo "5. Updating network subnet AZ reference..."
+    yq eval '.networks[0].subnets[0].azs[0] = "z1"' -i cloud-config.yml
+
+    echo "Updating cloud config with vm_types'..."
     yq eval '.vm_types += [{"name": "minimal", "cloud_properties": {}}]' -i cloud-config.yml
+    yq eval '.vm_types += [{"name": "small", "cloud_properties": {}}]' -i cloud-config.yml
+    yq eval '.vm_types += [{"name": "small-highmem", "cloud_properties": {}}]' -i cloud-config.yml
+    yq eval '.vm_types += [{"name": "medium", "cloud_properties": {}}]' -i cloud-config.yml
+
+    echo "Updating cloud config with vm_extensions'..."
+    yq eval '.vm_extensions += [{"name": "5GB_ephemeral_disk"]' -i cloud-config.yml
+    yq eval '.vm_extensions += [{"name": "50GB_ephemeral_disk"]' -i cloud-config.yml
+    yq eval '.vm_extensions += [{"name": "500GB_ephemeral_disk"]' -i cloud-config.yml
+    yq eval '.vm_extensions += [{"name": "10GB_ephemeral_disk"]' -i cloud-config.yml
+    yq eval '.vm_extensions += [{"name": "100GB_ephemeral_disk"]' -i cloud-config.yml
+    yq eval '.vm_extensions += [{"name": "1TB_ephemeral_disk"]' -i cloud-config.yml
+
+    echo "Adding Disktypes'..."
+    yq eval '.disk_types += [{"name": "1GB", "disk_size": 1024 }]' -i cloud-config.yml
+    yq eval '.disk_types += [{"name": "5GB", "disk_size": 5120 }]' -i cloud-config.yml
+    yq eval '.disk_types += [{"name": "10GB", "disk_size": 10240 }]' -i cloud-config.yml
+    yq eval '.disk_types += [{"name": "100GB", "disk_size": 102400 }]' -i cloud-config.yml
+
+    echo "Updating the cloud config..."
     bosh update-cloud-config cloud-config.yml --non-interactive
   fi
 
