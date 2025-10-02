@@ -452,12 +452,12 @@ function bosh_deploy() {
     yq eval '.vm_types += [{"name": "medium", "cloud_properties": {}}]' -i cloud-config.yml
 
     echo "Updating cloud config with vm_extensions'..."
-    yq eval '.vm_extensions += [{"name": "5GB_ephemeral_disk"]' -i cloud-config.yml
-    yq eval '.vm_extensions += [{"name": "50GB_ephemeral_disk"]' -i cloud-config.yml
-    yq eval '.vm_extensions += [{"name": "500GB_ephemeral_disk"]' -i cloud-config.yml
-    yq eval '.vm_extensions += [{"name": "10GB_ephemeral_disk"]' -i cloud-config.yml
-    yq eval '.vm_extensions += [{"name": "100GB_ephemeral_disk"]' -i cloud-config.yml
-    yq eval '.vm_extensions += [{"name": "1TB_ephemeral_disk"]' -i cloud-config.yml
+    yq eval '.vm_extensions += [{"name": "5GB_ephemeral_disk" }]' -i cloud-config.yml
+    yq eval '.vm_extensions += [{"name": "50GB_ephemeral_disk" }]' -i cloud-config.yml
+    yq eval '.vm_extensions += [{"name": "500GB_ephemeral_disk" }]' -i cloud-config.yml
+    yq eval '.vm_extensions += [{"name": "10GB_ephemeral_disk" }]' -i cloud-config.yml
+    yq eval '.vm_extensions += [{"name": "100GB_ephemeral_disk" }]' -i cloud-config.yml
+    yq eval '.vm_extensions += [{"name": "1TB_ephemeral_disk" }]' -i cloud-config.yml
 
     echo "Adding Disktypes'..."
     yq eval '.disk_types += [{"name": "1GB", "disk_size": 1024 }]' -i cloud-config.yml
