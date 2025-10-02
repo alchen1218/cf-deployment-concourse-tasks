@@ -458,6 +458,8 @@ function bosh_deploy() {
     yq eval '.vm_extensions += [{"name": "10GB_ephemeral_disk" }]' -i cloud-config.yml
     yq eval '.vm_extensions += [{"name": "100GB_ephemeral_disk" }]' -i cloud-config.yml
     yq eval '.vm_extensions += [{"name": "1TB_ephemeral_disk" }]' -i cloud-config.yml
+    yq eval '.vm_extensions += [{"name": "ssh-proxy-and-router-lb" }]' -i cloud-config.yml
+    yq eval '.vm_extensions += [{"name": "cf-tcp-router-network-properties" }]' -i cloud-config.yml
 
     echo "Adding Disktypes'..."
     yq eval '.disk_types += [{"name": "1GB", "disk_size": 1024 }]' -i cloud-config.yml
